@@ -2,21 +2,21 @@ import de.hanno.ecs.*
 import java.nio.ByteBuffer
 
 fun main() {
-    repeat(10) {
+    repeat(1000) {
         val archeTypes = listOf(
-            PositionArchetype,
-            PositionVelocityArchetype,
-            PositionVelocityPackedArchetype,
+            PositionArchetype(),
+            PositionVelocityArchetype(),
+            PositionVelocityPackedArchetype(),
         )
 
-        World(archeTypes).apply {
+        World(archeTypes = archeTypes).apply {
             run {
                 val start = System.currentTimeMillis()
                 repeat(maxEntityCount) {
                     Entity().apply {
-                        add(PositionVelocityArchetype)
-                        add(PositionArchetype)
-                        add(PositionVelocityPackedArchetype)
+                        add(archeTypes[0])
+                        add(archeTypes[1])
+                        add(archeTypes[2])
                     }
                 }
                 println("Creating $entityCount entities took ${System.currentTimeMillis() - start} ms")
@@ -26,12 +26,44 @@ fun main() {
                 archeTypes.forEach { it.updateAlive() }
                 println("Update $entityCount entities took ${System.currentTimeMillis() - start} ms")
             }
+            run {
+                val start = System.currentTimeMillis()
+                repeat(maxEntityCount) {
+                    val entity = getEntity(it)!!
+                    entity.get(PositionComponent::class.java)!!.apply {
+                        a += 1
+                    }
+                }
+                println("Accessing $entityCount normal components took ${System.currentTimeMillis() - start} ms")
+            }
+            run {
+                val start = System.currentTimeMillis()
+                repeat(maxEntityCount) {
+                    val entity = getEntity(it)!!
+                    entity.on<PositionVelocityPacked> {
+                        a += 1
+                    }
+                }
+                println("Accessing $entityCount packed components with block took ${System.currentTimeMillis() - start} ms")
+            }
+            run {
+                val start = System.currentTimeMillis()
+                repeat(maxEntityCount) {
+                    val entity = getEntity(it)!!
+                    entity.get<PositionVelocityPacked>()!!.apply {
+                        a += 1
+                    }
+                }
+                println("Accessing $entityCount packed components normally took ${System.currentTimeMillis() - start} ms")
+            }
         }
     }
 }
 
 data class PositionComponent(var a: Int) : Component
-object PositionArchetype : ArchetypeImpl<PositionComponent>() {
+class PositionArchetype : ArchetypeImpl<PositionComponent>() {
+    override val componentClass = PositionComponent::class.java
+
     override fun createFor(entityId: Entity) {
         components[entityId.idPart.toInt()] = PositionComponent(5)
     }
@@ -40,20 +72,22 @@ object PositionArchetype : ArchetypeImpl<PositionComponent>() {
     }
 }
 
-interface Position : Component {
+interface Position {
     var a: Int
 }
 
-interface Velocity : Component {
+interface Velocity {
     var b: Int
 }
 
 data class PositionVelocity(
     override var a: Int = 5,
     override var b: Int = 5,
-) : Position, Velocity
+) : Position, Velocity, Component
 
-object PositionVelocityArchetype : ArchetypeImpl<PositionVelocity>() {
+class PositionVelocityArchetype : ArchetypeImpl<PositionVelocity>() {
+    override val componentClass = PositionVelocity::class.java
+
     override fun createFor(entityId: Entity) {
         components[entityId.idPart.toInt()] = PositionVelocity()
     }
@@ -63,10 +97,11 @@ object PositionVelocityArchetype : ArchetypeImpl<PositionVelocity>() {
     }
 }
 
-interface PositionVelocityPacked: Position, Velocity
+interface PositionVelocityPacked: Position, Velocity, PackedComponent
 
-object PositionVelocityPackedArchetype: PackedArchetype<PositionVelocityPacked>() {
-    private val entities = mutableListOf<Int>()
+class PositionVelocityPackedArchetype: PackedArchetype<PositionVelocityPacked>() {
+    override val componentClass = PositionVelocityPacked::class.java
+    private val entities = mutableMapOf<Int, Int>()
     private var currentIndex = 0
     private val buffer = ByteBuffer.allocateDirect(Int.MAX_VALUE)
 
@@ -88,7 +123,7 @@ object PositionVelocityPackedArchetype: PackedArchetype<PositionVelocityPacked>(
     }
 
     override fun createFor(entityId: Entity) {
-        entities.add(entityId.idPart.toInt())
+        entities[entityId.idPart.toInt()] = entities.size
     }
 
     override fun deleteFor(entityId: Entity) {
@@ -96,11 +131,33 @@ object PositionVelocityPackedArchetype: PackedArchetype<PositionVelocityPacked>(
     }
 
     context(World)
+    override fun on(entityId: Entity, block: PositionVelocityPacked.() -> Unit) {
+        val index = entities.getOrDefault(entityId.idPart.toInt(), null)
+        if(index != null) {
+            if(entityId.isAlive) {
+                buffer.position(index * (2 * Int.SIZE_BYTES))
+                slidingWindow.block()
+            }
+        }
+    }
+    context(World)
+    override fun getFor(entityId: Entity): PositionVelocityPacked? {
+        val index = entities.getOrDefault(entityId.idPart.toInt(), null)
+
+        return if(index != null) {
+            if(entityId.isAlive) {
+                buffer.position(index * (2 * Int.SIZE_BYTES))
+                slidingWindow
+            } else null
+        } else null
+    }
+
+    context(World)
     override fun updateAlive() {
         currentIndex = 0
         buffer.position(0)
 
-        entities.forEach { entityId ->
+        entities.keys.forEach { entityId ->
             val entityId = EntityId(entityId)
             if(entityId.isAlive) {
                 update(entityId, slidingWindow)
@@ -112,6 +169,5 @@ object PositionVelocityPackedArchetype: PackedArchetype<PositionVelocityPacked>(
     override fun update(entityId: EntityId, component: PositionVelocityPacked) {
         component.a += 1
         component.b += 2
-//        println("Update of ${entityId.idPart} with $component")
     }
 }

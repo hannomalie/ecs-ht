@@ -2,15 +2,19 @@ package de.hanno.ecs
 
 internal var archetypeCounter = 0
 
-interface Archetype<T: Component> {
+interface Archetype<T: BaseComponent> {
+    val componentClass: Class<T>
+
     val index: Int
     fun update(entityId: EntityId, component: T) {}
 
     context(World)
-    fun updateAlive()
+    fun updateAlive() {}
 
     fun createFor(entityId: Entity)
     fun deleteFor(entityId: Entity)
+
+    fun correspondsTo(clazz: Class<*>) = clazz.isAssignableFrom(componentClass)
 }
 
 abstract class ArchetypeImpl<T: Component>: Archetype<T> {
@@ -28,13 +32,20 @@ abstract class ArchetypeImpl<T: Component>: Archetype<T> {
     override fun deleteFor(entityId: Entity) {
         components.remove(entityId.idPart.toInt())
     }
+
+    fun getFor(entityId: Entity): T? = components[entityId.idPart.toInt()]
 }
 
-abstract class PackedArchetype<T: Component>: Archetype<T> {
+abstract class PackedArchetype<T: PackedComponent>: Archetype<T> {
     override val index = archetypeCounter++
+
+    context(World)
+    abstract fun on(entityId: Entity, block: T.() -> Unit)
+    context(World)
+    abstract fun getFor(entityId: Entity): T?
 }
 
 context(World)
-fun <T: Component> MutableMap<Int, T>.filterAlive() = filterKeys {
+fun <T: BaseComponent> MutableMap<Int, T>.filterAlive() = filterKeys {
     EntityId(it).isAlive
 }

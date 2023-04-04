@@ -4,9 +4,9 @@ internal val idShiftBitCount = 32
 internal val generationShiftBitCount = 16
 
 class World(
+    val maxEntityCount: Int = 100000,
     val archeTypes: List<Archetype<*>> = mutableListOf()
 ) {
-    internal val maxEntityCount = 100000
     internal val entityIndex = LongArray(maxEntityCount)
     internal val idsToRecycle = mutableListOf<Long>()
 
@@ -19,6 +19,14 @@ class World(
     }
 
     fun Entity() = EntityId(allocateId())
+
+    fun getEntity(id: Int): EntityId? {
+        if(id > entityCounter) return null
+
+        val entity = EntityId(EntityId(id).retrieveLatestEntity())
+
+        return if(entity.isAlive) entity else null
+    }
 }
 
 @JvmInline
@@ -58,7 +66,38 @@ fun <T: Component> Entity.has(archetype: Archetype<T>): Boolean {
 }
 
 context(World)
-fun <T: Component> Entity.add(archetype: Archetype<T>) {
+fun <T: Component> Entity.get(clazz: Class<T>): T? {
+    val latestEntity = retrieveLatestEntity()
+    val archeType = archeTypes.filterIsInstance<ArchetypeImpl<T>>().firstOrNull { it.correspondsTo(clazz) }
+
+    return archeType?.getFor(EntityId(latestEntity))
+}
+
+context(World)
+inline fun <reified T: PackedComponent> Entity.on(noinline block: T.() -> Unit) {
+    on(T::class.java, block)
+}
+context(World)
+fun <T: PackedComponent> Entity.on(clazz: Class<T>, block: T.() -> Unit) {
+    val latestEntity = retrieveLatestEntity()
+    val archeType = archeTypes.filterIsInstance<PackedArchetype<T>>().firstOrNull { it.correspondsTo(clazz) }
+
+    archeType?.on(EntityId(latestEntity), block)
+}
+
+context(World)
+inline fun <reified T: PackedComponent> Entity.get(): T? = get(T::class.java)
+
+context(World)
+fun <T: PackedComponent> Entity.get(clazz: Class<T>): T? {
+    val latestEntity = retrieveLatestEntity()
+    val archeType = archeTypes.filterIsInstance<PackedArchetype<T>>().firstOrNull { it.correspondsTo(clazz) }
+
+    return archeType?.getFor(EntityId(latestEntity))
+}
+
+context(World)
+fun <T: BaseComponent> Entity.add(archetype: Archetype<T>) {
     entityIndex[idPart.toInt()] = id[archetype.index, true]
 
     archetype.createFor(this)

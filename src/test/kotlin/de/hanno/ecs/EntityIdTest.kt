@@ -114,16 +114,28 @@ class Component2(var a: Int = 0) : Component
 class Component3(var a: Int = 0) : Component
 
 val archetypes = mutableListOf(
-    object: Archetype<Component0>() {
-        override fun create() = Component0(5)
+    object: ArchetypeImpl<Component0>() {
+        override val componentClass = Component0::class.java
+        override fun createFor(entityId: Entity) {
+            components[entityId.idPart.toInt()] = Component0(5)
+        }
     },
-    object: Archetype<Component1>() {
-        override fun create() = Component1(5)
+    object: ArchetypeImpl<Component1>() {
+        override val componentClass = Component1::class.java
+        override fun createFor(entityId: Entity) {
+            components[entityId.idPart.toInt()] = Component1(5)
+        }
     },
-    object: Archetype<Component2>() {
-        override fun create() = Component2(5)
+    object: ArchetypeImpl<Component2>() {
+        override val componentClass = Component2::class.java
+        override fun createFor(entityId: Entity) {
+            components[entityId.idPart.toInt()] = Component2(5)
+        }
     },
-    object: Archetype<Component3>() {
-        override fun create() = Component3(5)
+    object: ArchetypeImpl<Component3>() {
+        override val componentClass = Component3::class.java
+        override fun createFor(entityId: Entity) {
+            components[entityId.idPart.toInt()] = Component3(5)
+        }
     },
 )
