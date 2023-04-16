@@ -3,24 +3,26 @@ import java.nio.ByteBuffer
 
 fun main() {
     repeat(1000) {
-        val archeTypes = listOf(
-            PositionArchetype(),
-            PositionVelocityArchetype(),
-            PositionVelocityPackedArchetype(),
-        )
 
-        World(archeTypes = archeTypes).apply {
-            run {
+        World().apply {
+            val archeTypes = listOf(
+                PositionArchetype(this),
+                PositionVelocityArchetype(this),
+                PositionVelocityPackedArchetype(this),
+            )
+            val entities = run {
                 val start = System.currentTimeMillis()
-                repeat(maxEntityCount) {
+                val entities = (0 until maxEntityCount).map {
                     Entity().apply {
                         add(archeTypes[0])
                         add(archeTypes[1])
                         add(archeTypes[2])
                     }
                 }
-                println("Creating $entityCount entities took ${System.currentTimeMillis() - start} ms")
+                println("Creating $maxEntityCount entities took ${System.currentTimeMillis() - start} ms")
+                entities
             }
+            val entityCount = entities.size
             run {
                 val start = System.currentTimeMillis()
                 archeTypes.forEach { it.updateAlive() }
@@ -28,8 +30,7 @@ fun main() {
             }
             run {
                 val start = System.currentTimeMillis()
-                repeat(maxEntityCount) {
-                    val entity = getEntity(it)!!
+                entities.forEach { entity ->
                     entity.get(PositionComponent::class.java)!!.apply {
                         a += 1
                     }
@@ -38,8 +39,7 @@ fun main() {
             }
             run {
                 val start = System.currentTimeMillis()
-                repeat(maxEntityCount) {
-                    val entity = getEntity(it)!!
+                entities.forEach { entity ->
                     entity.on<PositionVelocityPacked> {
                         a += 1
                     }
@@ -48,24 +48,32 @@ fun main() {
             }
             run {
                 val start = System.currentTimeMillis()
-                repeat(maxEntityCount) {
-                    val entity = getEntity(it)!!
+                entities.forEach { entity ->
                     entity.get<PositionVelocityPacked>()!!.apply {
                         a += 1
                     }
                 }
                 println("Accessing $entityCount packed components normally took ${System.currentTimeMillis() - start} ms")
             }
+            run {
+                val start = System.currentTimeMillis()
+                entityIndex.keys.forEach { entity ->
+                    entity.get<PositionVelocityPacked>()!!.apply {
+                        a += 1
+                    }
+                }
+                println("Accessing $entityCount packed components from world normally took ${System.currentTimeMillis() - start} ms")
+            }
         }
     }
 }
 
-data class PositionComponent(var a: Int) : Component
-class PositionArchetype : ArchetypeImpl<PositionComponent>() {
+data class PositionComponent(var a: Int)
+class PositionArchetype(world: World) : ArchetypeImpl<PositionComponent>(world) {
     override val componentClass = PositionComponent::class.java
 
-    override fun createFor(entityId: Entity) {
-        components[entityId.idPart.toInt()] = PositionComponent(5)
+    override fun createFor(entityId: EntityId) {
+        components[entityId] = PositionComponent(5)
     }
     override fun update(entityId: EntityId, component: PositionComponent) {
         component.a += 1
@@ -83,13 +91,13 @@ interface Velocity {
 data class PositionVelocity(
     override var a: Int = 5,
     override var b: Int = 5,
-) : Position, Velocity, Component
+) : Position, Velocity
 
-class PositionVelocityArchetype : ArchetypeImpl<PositionVelocity>() {
+class PositionVelocityArchetype(world: World) : ArchetypeImpl<PositionVelocity>(world) {
     override val componentClass = PositionVelocity::class.java
 
-    override fun createFor(entityId: Entity) {
-        components[entityId.idPart.toInt()] = PositionVelocity()
+    override fun createFor(entityId: EntityId) {
+        components[entityId] = PositionVelocity()
     }
     override fun update(entityId: EntityId, component: PositionVelocity) {
         component.a += 1
@@ -97,9 +105,9 @@ class PositionVelocityArchetype : ArchetypeImpl<PositionVelocity>() {
     }
 }
 
-interface PositionVelocityPacked: Position, Velocity, PackedComponent
+interface PositionVelocityPacked: Position, Velocity
 
-class PositionVelocityPackedArchetype: PackedArchetype<PositionVelocityPacked>() {
+class PositionVelocityPackedArchetype(private val world: World): PackedArchetype<PositionVelocityPacked>(world) {
     override val componentClass = PositionVelocityPacked::class.java
     private val entities = mutableMapOf<Int, Int>()
     private var currentIndex = 0
@@ -122,16 +130,15 @@ class PositionVelocityPackedArchetype: PackedArchetype<PositionVelocityPacked>()
         override fun toString(): String = "PositionVelocityPacked{a:$a, b:$b}"
     }
 
-    override fun createFor(entityId: Entity) {
+    override fun createFor(entityId: EntityId) {
         entities[entityId.idPart.toInt()] = entities.size
     }
 
-    override fun deleteFor(entityId: Entity) {
+    override fun deleteFor(entityId: EntityId) {
         entities.remove(entityId.idPart.toInt())
     }
 
-    context(World)
-    override fun on(entityId: Entity, block: PositionVelocityPacked.() -> Unit) {
+    override fun on(entityId: EntityId, block: PositionVelocityPacked.() -> Unit) = world.run {
         val index = entities.getOrDefault(entityId.idPart.toInt(), null)
         if(index != null) {
             if(entityId.isAlive) {
@@ -140,8 +147,7 @@ class PositionVelocityPackedArchetype: PackedArchetype<PositionVelocityPacked>()
             }
         }
     }
-    context(World)
-    override fun getFor(entityId: Entity): PositionVelocityPacked? {
+    override fun getFor(entityId: EntityId): PositionVelocityPacked? = world.run {
         val index = entities.getOrDefault(entityId.idPart.toInt(), null)
 
         return if(index != null) {
@@ -152,8 +158,7 @@ class PositionVelocityPackedArchetype: PackedArchetype<PositionVelocityPacked>()
         } else null
     }
 
-    context(World)
-    override fun updateAlive() {
+    override fun updateAlive() = world.run {
         currentIndex = 0
         buffer.position(0)
 

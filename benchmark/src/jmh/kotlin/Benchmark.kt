@@ -27,15 +27,11 @@ open class CreationBenchmark {
 
         @Setup(Level.Trial)
         open fun doSetup() {
-            positionVelocityPackedArchetype = PositionVelocityPackedArchetype()
-            positionArchetype = PositionArchetype()
             world = World(
                 100000,
-                listOf(
-                    positionVelocityPackedArchetype,
-                    positionArchetype,
-                )
             )
+            positionVelocityPackedArchetype = PositionVelocityPackedArchetype(world)
+            positionArchetype = PositionArchetype(world)
         }
     }
 
@@ -74,7 +70,7 @@ open class CreationBenchmark {
     @Benchmark
     fun get_10000_entities(state:State, blackhole: Blackhole) = state.world.apply {
         repeat(10000) {
-            blackhole.consume(getEntity(it))
+            blackhole.consume(getEntity(EntityId(it)))
         }
     }
 }
@@ -96,19 +92,13 @@ open class IterationBenchmark {
 
         @Setup(Level.Trial)
         open fun doSetup() {
-            positionVelocityPackedArchetype = PositionVelocityPackedArchetype()
-            positionArchetype = PositionArchetype()
-            blackholePositionArchetype = BlackholePositionArchetype()
-            blackholePositionVelocityPackedArchetype = BlackholePositionVelocityPackedArchetype()
             world = World(
                 100000,
-                listOf(
-                    positionVelocityPackedArchetype,
-                    positionArchetype,
-                    blackholePositionArchetype,
-                    blackholePositionVelocityPackedArchetype,
-                )
             )
+            positionVelocityPackedArchetype = PositionVelocityPackedArchetype(world)
+            positionArchetype = PositionArchetype(world)
+            blackholePositionArchetype = BlackholePositionArchetype(world)
+            blackholePositionVelocityPackedArchetype = BlackholePositionVelocityPackedArchetype(world)
             repeat(100000) {
                 world.apply {
                     Entity().apply {
@@ -131,7 +121,7 @@ open class IterationBenchmark {
     @Benchmark
     fun get_100000_entities_1_comp(state: State, blackhole: Blackhole) = state.world.apply {
         repeat(100000) {
-            val comp = getEntity(it)!!.get(PositionComponent::class.java)
+            val comp = getEntity(EntityId(it))!!.get(PositionComponent::class.java)
             blackhole.consume(comp)
         }
     }
@@ -152,12 +142,12 @@ open class IterationBenchmark {
         blackholePositionVelocityPackedArchetype.updateAlive()
     }
 
-    class BlackholePositionArchetype : ArchetypeImpl<PositionComponent>() {
+    class BlackholePositionArchetype(world: World) : ArchetypeImpl<PositionComponent>(world) {
         lateinit var blackhole: Blackhole
         override val componentClass = PositionComponent::class.java
 
-        override fun createFor(entityId: Entity) {
-            components[entityId.idPart.toInt()] = PositionComponent(5)
+        override fun createFor(entityId: EntityId) {
+            components[entityId] = PositionComponent(5)
         }
         override fun update(entityId: EntityId, component: PositionComponent) {
             blackhole.consume(component.a)
@@ -165,7 +155,7 @@ open class IterationBenchmark {
     }
 }
 
-class BlackholePositionVelocityPackedArchetype: PackedArchetype<PositionVelocityPacked>() {
+class BlackholePositionVelocityPackedArchetype(world: World): PackedArchetype<PositionVelocityPacked>(world) {
     lateinit var blackhole: Blackhole
     override val componentClass = PositionVelocityPacked::class.java
     private val entities = mutableMapOf<Int, Int>()
@@ -189,16 +179,16 @@ class BlackholePositionVelocityPackedArchetype: PackedArchetype<PositionVelocity
         override fun toString(): String = "PositionVelocityPacked{a:$a, b:$b}"
     }
 
-    override fun createFor(entityId: Entity) {
+    override fun createFor(entityId: EntityId) {
         entities[entityId.idPart.toInt()] = entities.size
     }
 
-    override fun deleteFor(entityId: Entity) {
+    override fun deleteFor(entityId: EntityId) {
         entities.remove(entityId.idPart.toInt())
     }
 
     context(World)
-    override fun on(entityId: Entity, block: PositionVelocityPacked.() -> Unit) {
+    override fun on(entityId: EntityId, block: PositionVelocityPacked.() -> Unit) {
         val index = entities.getOrDefault(entityId.idPart.toInt(), null)
         if(index != null) {
             if(entityId.isAlive) {
@@ -208,7 +198,7 @@ class BlackholePositionVelocityPackedArchetype: PackedArchetype<PositionVelocity
         }
     }
     context(World)
-    override fun getFor(entityId: Entity): PositionVelocityPacked? {
+    override fun getFor(entityId: EntityId): PositionVelocityPacked? {
         val index = entities.getOrDefault(entityId.idPart.toInt(), null)
 
         return if(index != null) {

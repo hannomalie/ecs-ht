@@ -3,8 +3,8 @@ package de.hanno.ecs
 import org.junit.jupiter.api.Test
 import kotlin.test.assertTrue
 
-interface ParentComponent0: Component
-interface ParentComponent1: Component
+interface ParentComponent0
+interface ParentComponent1
 class SubComponent: ParentComponent0, ParentComponent1
 
 class ArcheTypeTest {
@@ -13,10 +13,10 @@ class ArcheTypeTest {
         val archeType = object: Archetype<SubComponent> {
             override val componentClass = SubComponent::class.java
 
-            override val index: Int get() = TODO("Not yet implemented")
-            context(World) override fun updateAlive() {}
-            override fun createFor(entityId: Entity) {}
-            override fun deleteFor(entityId: Entity) {}
+            override val id: Long get() = TODO("Not yet implemented")
+            override fun updateAlive() {}
+            override fun createFor(entityId: EntityId) {}
+            override fun deleteFor(entityId: EntityId) {}
         }
 
         assertTrue(archeType.correspondsTo(SubComponent::class.java))

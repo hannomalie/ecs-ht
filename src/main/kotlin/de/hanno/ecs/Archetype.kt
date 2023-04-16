@@ -1,51 +1,53 @@
 package de.hanno.ecs
 
-internal var archetypeCounter = 0
-
-interface Archetype<T: BaseComponent> {
+interface Archetype<T> {
     val componentClass: Class<T>
 
-    val index: Int
+    val id: Long
     fun update(entityId: EntityId, component: T) {}
 
-    context(World)
     fun updateAlive() {}
 
-    fun createFor(entityId: Entity)
-    fun deleteFor(entityId: Entity)
+    fun createFor(entityId: EntityId)
+    fun deleteFor(entityId: EntityId)
 
     fun correspondsTo(clazz: Class<*>) = clazz.isAssignableFrom(componentClass)
+    fun getFor(entityId: EntityId): T?
 }
 
-abstract class ArchetypeImpl<T: Component>: Archetype<T> {
-    override val index = archetypeCounter++
+abstract class ArchetypeImpl<T>(private val world: World): Archetype<T> {
+    override val id = world.entityCounter++
 
-    protected val components = mutableMapOf<Int, T>()
+    protected val components = mutableMapOf<Long, T>()
 
-    context(World)
-    override fun updateAlive() {
+    init {
+        world.archetypes.add(this)
+    }
+
+    override fun updateAlive() = world.run {
         components.filterAlive().forEach { (entityId, component) ->
-            update(EntityId(entityId), component)
+            update(entityId, component)
         }
     }
 
-    override fun deleteFor(entityId: Entity) {
-        components.remove(entityId.idPart.toInt())
+    override fun deleteFor(entityId: EntityId) {
+        components.remove(entityId)
     }
 
-    fun getFor(entityId: Entity): T? = components[entityId.idPart.toInt()]
+    override fun getFor(entityId: EntityId): T? = components[entityId]
 }
 
-abstract class PackedArchetype<T: PackedComponent>: Archetype<T> {
-    override val index = archetypeCounter++
+abstract class PackedArchetype<T>(world: World): Archetype<T> {
+    override val id = world.entityCounter++
 
-    context(World)
-    abstract fun on(entityId: Entity, block: T.() -> Unit)
-    context(World)
-    abstract fun getFor(entityId: Entity): T?
+    init {
+        world.archetypes.add(this)
+    }
+
+    abstract fun on(entityId: EntityId, block: T.() -> Unit)
 }
 
 context(World)
-fun <T: BaseComponent> MutableMap<Int, T>.filterAlive() = filterKeys {
-    EntityId(it).isAlive
+fun <T> MutableMap<Long, T>.filterAlive() = filterKeys {
+    it.isAlive
 }
