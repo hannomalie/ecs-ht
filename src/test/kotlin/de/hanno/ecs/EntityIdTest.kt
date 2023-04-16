@@ -60,6 +60,19 @@ class EntityIdTest {
         assertTrue(ComponentId(0).isComponent)
         assertFalse(0L.isComponent)
     }
+
+    @Test
+    fun `instanceOf flag flags entity`() {
+        World().run {
+            val entity0 = Entity()
+            val entity1 = Entity()
+            entity1.setInstanceOf(entity0)
+
+            val savedIdentifier = entityIndex[entity1]!![0]
+            assertTrue(savedIdentifier.isInstanceOf)
+            assertEquals(savedIdentifier.targetInstance, entity0)
+        }
+    }
 }
 
 class Component0(var a: Int = 0)

@@ -4,7 +4,7 @@ class World(
     val maxEntityCount: Int = 100000,
 ) {
     internal val archetypes = mutableListOf<Archetype<*>>()
-    internal val entityIndex = mutableMapOf<EntityId, MutableList<Archetype<*>>>()
+    internal val entityIndex = mutableMapOf<EntityId, MutableList<Long>>()
 
     internal val idsToRecycle = mutableListOf<Long>()
 
@@ -16,9 +16,17 @@ class World(
         idsToRecycle.remove(this)
     } ?: (entityCounter++ shl idShiftBitCount)
 
-    fun Entity(): Long = allocateId().apply {
-        entityIndex[this] = mutableListOf()
+    fun Entity(): Long {
+        val allocatedId = allocateId() or 1L
+
+        return allocatedId.apply {
+            entityIndex[this] = mutableListOf()
+        }
     }
 
     fun getEntity(id: EntityId) = if (entityIndex.containsKey(id)) id else null
+
+    fun EntityId.setInstanceOf(other: EntityId) {
+        entityIndex[this]!!.add(other or 3L)
+    }
 }

@@ -12,6 +12,8 @@ fun ComponentId(int: Int): Long = (int.toLong() shl idShiftBitCount) or 2L
 
 val Long.isEntity: Boolean get() = this[0]
 val Long.isComponent: Boolean get() = this[1] && !this[0]
+val Long.isInstanceOf: Boolean get() = this[1] && this[1]
+val Long.targetInstance: Long get() = idPart or 1L
 
 context(World)
 fun EntityId.getBinaryStrings(): String {
@@ -23,7 +25,7 @@ val Long.binaryString get() = toString(2).padStart(Long.SIZE_BITS, '0')
 val Long.shortBinaryString get() = toString(2).padStart(Int.SIZE_BITS, '0')
 
 context(World)
-fun <T> EntityId.has(archetype: Archetype<T>): Boolean = entityIndex[this]?.contains(archetype) ?: false
+fun <T> EntityId.has(archetype: Archetype<T>): Boolean = entityIndex[this]?.contains(archetype.id) ?: false
 
 context(World)
 fun <T> EntityId.get(clazz: Class<T>): T? {
@@ -49,7 +51,7 @@ inline fun <reified T> EntityId.get(): T? = get(T::class.java)
 
 context(World)
 fun <T> EntityId.add(archetype: Archetype<T>) {
-    entityIndex[this]!!.add(archetype)
+    entityIndex[this]!!.add(archetype.id)
     archetype.createFor(this)
 }
 
@@ -63,7 +65,7 @@ fun EntityId.delete() {
 
 context(World)
 fun EntityId.remove(componentType: Archetype<*>) {
-    entityIndex[this]!!.remove(componentType)
+    entityIndex[this]!!.remove(componentType.id)
 }
 
 context(World)
