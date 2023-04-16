@@ -48,6 +48,18 @@ class EntityIdTest {
             }
         }
     }
+
+    @Test
+    fun `id flag flags entity id`() {
+        assertTrue(EntityId(0).isEntity)
+        assertFalse(0L.isEntity)
+    }
+
+    @Test
+    fun `component flag flags component id`() {
+        assertTrue(ComponentId(0).isComponent)
+        assertFalse(0L.isComponent)
+    }
 }
 
 class Component0(var a: Int = 0)

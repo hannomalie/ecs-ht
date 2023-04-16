@@ -3,34 +3,15 @@ package de.hanno.ecs
 internal val idShiftBitCount = 32
 internal val generationShiftBitCount = 16
 
-
-class World(
-    val maxEntityCount: Int = 100000,
-) {
-    internal val archetypes = mutableListOf<Archetype<*>>()
-    internal val entityIndex = mutableMapOf<EntityId, MutableList<Archetype<*>>>()
-
-    internal val idsToRecycle = mutableListOf<Long>()
-
-    internal var entityCounter = 0L
-
-    val entityCount: Int get() = entityCounter.toInt() - idsToRecycle.size
-
-    private fun allocateId(): Long = idsToRecycle.firstOrNull()?.apply {
-        idsToRecycle.remove(this)
-    } ?: entityCounter++ shl idShiftBitCount
-
-    fun Entity(): Long = allocateId().apply {
-        entityIndex[this] = mutableListOf()
-    }
-
-    fun getEntity(id: EntityId) = if (entityIndex.containsKey(id)) id else null
-}
-
 typealias EntityId = Long
-fun EntityId(int: Int): Long = int.toLong() shl idShiftBitCount
+fun EntityId(int: Int): Long = (int.toLong() shl idShiftBitCount) or 1L
 val EntityId.idPart: Long get() = this shr idShiftBitCount
 fun EntityId.toBinaryString(): String = toString(2)
+
+fun ComponentId(int: Int): Long = (int.toLong() shl idShiftBitCount) or 2L
+
+val Long.isEntity: Boolean get() = this[0]
+val Long.isComponent: Boolean get() = this[1] && !this[0]
 
 context(World)
 fun EntityId.getBinaryStrings(): String {
@@ -75,9 +56,8 @@ fun <T> EntityId.add(archetype: Archetype<T>) {
 context(World)
 fun EntityId.delete() {
     if (isAlive) {
-        val actualGeneration = this shr generationShiftBitCount
         entityIndex.remove(this)
-        idsToRecycle.add(actualGeneration.withClearedComponents())
+        idsToRecycle.add(this) // TODO: Increment generation here
     }
 }
 
