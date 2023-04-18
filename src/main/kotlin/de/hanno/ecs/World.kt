@@ -4,6 +4,7 @@ class World(
     val maxEntityCount: Int = 100000,
 ) {
     internal val archetypes = mutableListOf<Archetype>()
+    internal val registeredComponents = mutableMapOf<Class<*>, Long>()
     internal val entityIndex = mutableMapOf<EntityId, MutableList<Long>>()
 
     internal val idsToRecycle = mutableListOf<Long>()
@@ -11,6 +12,12 @@ class World(
     internal var entityCounter = 0L
 
     val entityCount: Int get() = entityIndex.size - idsToRecycle.size
+
+    inline fun <reified T> register() = register(T::class.java)
+
+    fun register(clazz: Class<*>): Long = ComponentId().apply {
+        registeredComponents[clazz] = this
+    }
 
     private fun allocateId(): Long = idsToRecycle.firstOrNull()?.apply {
         idsToRecycle.remove(this)

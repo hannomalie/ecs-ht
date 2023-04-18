@@ -1,5 +1,7 @@
 package de.hanno.ecs
 
+import java.lang.IllegalStateException
+
 internal val idShiftBitCount = 32
 internal val generationShiftBitCount = 16
 
@@ -25,14 +27,13 @@ val Long.binaryString get() = toString(2).padStart(Long.SIZE_BITS, '0')
 val Long.shortBinaryString get() = toString(2).padStart(Int.SIZE_BITS, '0')
 
 context(World)
-fun EntityId.has(archetype: Archetype): Boolean = entityIndex[this]?.contains(archetype.id) ?: false
+fun EntityId.has(componentClass: Class<*>): Boolean = entityIndex[this]?.contains(registeredComponents[componentClass]!!) ?: false
 
 context(World)
 fun <T> EntityId.get(clazz: Class<T>): T? {
-    // TODO: This assumes the first archetype for a given component saves it for an entity, which
-    // is not true, because the best fitting, most precise archetype saves it
-    // TODO: Implement 1) entityIndex lookup, 2) filter for components, 3) find archetype matching them
-    val archeType = archetypes.first { it.correspondsTo(clazz) }
+    val componentClasses = getNonPackedComponentClasses()
+
+    val archeType = if(clazz.isPacked) getOrCreatePackedArchetype(clazz as Class<PackedComponent>) else getOrCreateArchetype(componentClasses)
 
     val resolvedComponent = archeType.getFor(this)?.firstOrNull { clazz.isAssignableFrom(it!!.javaClass) } as T?
 
@@ -46,6 +47,8 @@ fun <T> EntityId.get(clazz: Class<T>): T? {
         potentialComponents.firstOrNull()
     }
 }
+
+fun Archetype.correspondsToAll(componentClasses: List<Class<*>>) = componentClasses.all { correspondsTo(it) }
 
 context(World)
 inline fun <reified T: PackedComponent> EntityId.on(noinline block: T.() -> Unit) {
@@ -63,17 +66,98 @@ context(World)
 inline fun <reified T> EntityId.get(): T? = get(T::class.java)
 
 context(World)
-fun EntityId.add(archetype: Archetype) {
-    entityIndex[this]!!.add(archetype.id)
+@JvmName("addPacked")
+fun EntityId.add(clazz: Class<*>) {
+    val componentId = registeredComponents[clazz] ?: run {
+        register(clazz)
+    }
+    entityIndex[this]!!.add(componentId)
+
+    val nonPackedComponentClasses = getNonPackedComponentClasses()
+    val archeType = getOrCreateArchetype(nonPackedComponentClasses)
+    archeType.createFor(this)
+    // TODO: Move over old components
+}
+context(World)
+fun <T: PackedComponent> EntityId.add(clazz: Class<T>) {
+    val componentId = registeredComponents[clazz] ?: run {
+        register(clazz)
+    }
+    entityIndex[this]!!.add(componentId)
+
+    val archetype = getOrCreatePackedArchetype(clazz)
     archetype.createFor(this)
+
+    // TODO: Move over old components
 }
 
 context(World)
-fun EntityId.add(clazz: Class<*>) {
-    val archetype = archetypes.first { it.correspondsTo(clazz) }
+private fun EntityId.getNonPackedComponentClasses() = getComponentClasses().filterNot { it.isPacked }
 
-    entityIndex[this]!!.add(archetype.id)
-    archetype.createFor(this)
+private val Class<*>.isPacked get() = PackedComponent::class.java.isAssignableFrom(this)
+
+context(World)
+private fun EntityId.getOrCreateArchetype(componentClasses: List<Class<*>>): Archetype {
+    val archeType = archetypes.firstOrNull { archeType ->
+        archeType.correspondsToAll(componentClasses)
+    } ?: run {
+        val newArchetype = object : ArchetypeImpl(this@World) {
+            override val componentClasses: List<Class<*>> = componentClasses
+
+            override fun createFor(entityId: EntityId) {
+                this.components[entityId] = componentClasses.map {
+                    it.constructors.first().newInstance() // TODO: Resort to factory instead of reflection constructor
+                }
+            }
+        }
+        archetypes.add(newArchetype)
+        newArchetype
+    }
+    return archeType
+}
+
+context(World)
+private fun <T: PackedComponent> EntityId.getOrCreatePackedArchetype(componentClass: Class<T>): Archetype {
+    val archeType = archetypes.firstOrNull { archeType ->
+        archeType.correspondsToAll(listOf(componentClass))
+    } ?: run {
+//        val newArchetype = object : PackedArchetype<T>(componentClass, this@World) {
+//            override fun on(entityId: EntityId, block: T.() -> Unit) {
+//                TODO("Not yet implemented")
+//            }
+//
+//            override fun getPackedFor(entityId: EntityId): T? {
+//                TODO("Not yet implemented")
+//            }
+//
+//            override val componentClasses: List<Class<*>> = listOf(componentClass)
+//
+//            override fun createFor(entityId: EntityId) {
+////                TODO("Not yet implemented")
+//            }
+//
+//            override fun deleteFor(entityId: EntityId) {
+//                TODO("Not yet implemented")
+//            }
+//
+//            override fun getFor(entityId: EntityId): List<*>? {
+//                TODO("Not yet implemented")
+//            }
+//        }
+//        archetypes.add(newArchetype)
+//        newArchetype
+
+        // TODO: Currently, need to be registered manually, make it automatically
+        return archetypes.firstOrNull { it.correspondsTo(componentClass) } ?: throw IllegalStateException(
+            "Please manually register an archetyp for $componentClass until it's implemented automatically"
+        )
+    }
+    return archeType
+}
+
+context(World)
+private fun EntityId.getComponentClasses(): List<Class<*>> = entityIndex[this]!!.filter { it.isComponent }.map { assignedId ->
+    registeredComponents.entries.first { it.value == assignedId }.key
 }
 
 context(World)
@@ -85,8 +169,8 @@ fun EntityId.delete() {
 }
 
 context(World)
-fun EntityId.remove(componentType: Archetype) {
-    entityIndex[this]!!.remove(componentType.id)
+fun EntityId.remove(componentClass: Class<*>) {
+    entityIndex[this]!!.remove(registeredComponents[componentClass]!!)
 }
 
 context(World)

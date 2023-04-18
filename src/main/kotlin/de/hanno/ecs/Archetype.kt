@@ -42,7 +42,7 @@ abstract class PackedArchetype<T: PackedComponent>(private val clazz: Class<T>, 
 
     abstract fun getPackedFor(entityId: EntityId): T?
 
-    override fun correspondsTo(clazz: Class<*>) = clazz.isAssignableFrom(this.clazz)
+    override fun correspondsTo(clazz: Class<*>) = clazz == this.clazz
 }
 
 context(World)

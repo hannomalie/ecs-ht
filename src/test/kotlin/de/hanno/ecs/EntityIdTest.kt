@@ -108,4 +108,13 @@ fun World.createArcheTypes(): MutableList<ArchetypeImpl> = mutableListOf(
             components[entityId] = listOf(Component3(5))
         }
     },
+    object: ArchetypeImpl(this) {
+        override val componentClasses = listOf(Component0::class.java, Component1::class.java)
+        override fun createFor(entityId: EntityId) {
+            components[entityId] = listOf(
+                Component0(5),
+                Component1()
+            )
+        }
+    },
 )
