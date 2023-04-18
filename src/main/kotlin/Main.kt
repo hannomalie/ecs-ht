@@ -25,7 +25,7 @@ fun main() {
             val entityCount = entities.size
             run {
                 val start = System.currentTimeMillis()
-                archeTypes.forEach { it.updateAlive() }
+                archeTypes.forEach { it.update() }
                 println("Update $entityCount entities took ${System.currentTimeMillis() - start} ms")
             }
             run {
@@ -69,46 +69,48 @@ fun main() {
 }
 
 data class PositionComponent(var a: Int)
-class PositionArchetype(world: World) : ArchetypeImpl<PositionComponent>(world) {
-    override val componentClass = PositionComponent::class.java
+class PositionArchetype(world: World) : ArchetypeImpl(world) {
+    override val componentClasses = listOf(PositionComponent::class.java)
 
     override fun createFor(entityId: EntityId) {
-        components[entityId] = PositionComponent(5)
+        components[entityId] = listOf(PositionComponent(5))
     }
-    override fun update(entityId: EntityId, component: PositionComponent) {
-        component.a += 1
+    override fun update() {
+        components.forEach { (_, componentsForEntity) ->
+            val positionComponent = componentsForEntity[0] as PositionComponent
+            positionComponent.a += 1
+        }
     }
 }
 
-interface Position {
+data class Velocity(var b: Int)
+
+class PositionVelocityArchetype(world: World) : ArchetypeImpl(world) {
+    override val componentClasses = listOf(PositionComponent::class.java, Velocity::class.java)
+
+    override fun createFor(entityId: EntityId) {
+        components[entityId] = listOf(PositionComponent(5), Velocity(2))
+    }
+
+    override fun update() {
+        components.forEach { (_, componentsForEntity) ->
+            componentsForEntity.forEach {
+                when(it) {
+                    is PositionComponent -> it.a += 1
+                    is Velocity -> it.b -= 1
+                }
+            }
+        }
+    }
+}
+
+interface PositionVelocityPacked: PackedComponent {
     var a: Int
-}
-
-interface Velocity {
     var b: Int
 }
 
-data class PositionVelocity(
-    override var a: Int = 5,
-    override var b: Int = 5,
-) : Position, Velocity
-
-class PositionVelocityArchetype(world: World) : ArchetypeImpl<PositionVelocity>(world) {
-    override val componentClass = PositionVelocity::class.java
-
-    override fun createFor(entityId: EntityId) {
-        components[entityId] = PositionVelocity()
-    }
-    override fun update(entityId: EntityId, component: PositionVelocity) {
-        component.a += 1
-        component.b -= 1
-    }
-}
-
-interface PositionVelocityPacked: Position, Velocity
-
-class PositionVelocityPackedArchetype(private val world: World): PackedArchetype<PositionVelocityPacked>(world) {
-    override val componentClass = PositionVelocityPacked::class.java
+class PositionVelocityPackedArchetype(private val world: World): PackedArchetype<PositionVelocityPacked>(PositionVelocityPacked::class.java, world) {
+    override val componentClasses = listOf(PositionVelocityPacked::class.java)
     private val entities = mutableMapOf<Int, Int>()
     private var currentIndex = 0
     private val buffer = ByteBuffer.allocateDirect(Int.MAX_VALUE)
@@ -147,7 +149,18 @@ class PositionVelocityPackedArchetype(private val world: World): PackedArchetype
             }
         }
     }
-    override fun getFor(entityId: EntityId): PositionVelocityPacked? = world.run {
+    override fun getFor(entityId: EntityId): List<*>? = world.run {
+        val index = entities.getOrDefault(entityId.idPart.toInt(), null)
+
+        return if(index != null) {
+            if(entityId.isAlive) {
+                buffer.position(index * (2 * Int.SIZE_BYTES))
+                listOf(slidingWindow)
+            } else null
+        } else null
+    }
+
+    override fun getPackedFor(entityId: EntityId): PositionVelocityPacked? = world.run {
         val index = entities.getOrDefault(entityId.idPart.toInt(), null)
 
         return if(index != null) {
@@ -158,21 +171,20 @@ class PositionVelocityPackedArchetype(private val world: World): PackedArchetype
         } else null
     }
 
-    override fun updateAlive() = world.run {
+    override fun update() = world.run {
         currentIndex = 0
         buffer.position(0)
 
         entities.keys.forEach { entityId ->
             val entityId = EntityId(entityId)
             if(entityId.isAlive) {
-                update(entityId, slidingWindow)
+                getPackedFor(entityId)?.apply {
+                    a += 1
+                    b += 2
+                }
             }
             currentIndex++
         }
     }
 
-    override fun update(entityId: EntityId, component: PositionVelocityPacked) {
-        component.a += 1
-        component.b += 2
-    }
 }

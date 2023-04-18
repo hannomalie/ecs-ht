@@ -3,7 +3,7 @@ package de.hanno.ecs
 class World(
     val maxEntityCount: Int = 100000,
 ) {
-    internal val archetypes = mutableListOf<Archetype<*>>()
+    internal val archetypes = mutableListOf<Archetype>()
     internal val entityIndex = mutableMapOf<EntityId, MutableList<Long>>()
 
     internal val idsToRecycle = mutableListOf<Long>()
@@ -23,6 +23,13 @@ class World(
             entityIndex[this] = mutableListOf()
         }
     }
+    fun ComponentId(): Long {
+        val allocatedId = (entityCounter++ shl idShiftBitCount).toComponentId()
+
+        return allocatedId.apply {
+            entityIndex[this] = mutableListOf()
+        }
+    }
 
     fun getEntity(id: EntityId) = if (entityIndex.containsKey(id)) id else null
 
@@ -32,4 +39,5 @@ class World(
 
     private fun EntityId.toInstanceOfIdentifier() = this or 3L
     private fun Long.toEntityId() = this or 1L
+    private fun Long.toComponentId() = this or 2L
 }

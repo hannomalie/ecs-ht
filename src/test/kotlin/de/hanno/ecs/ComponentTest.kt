@@ -77,4 +77,26 @@ class ComponentTest {
         assertNotNull(componentSharedFromEntity0)
         assertNotEquals(componentFromEntity0, componentFromEntity1)
     }
+
+    @TestFactory
+    fun `component archetype is determined correctly`(): Unit = World().run {
+        object: ArchetypeImpl(this) {
+            override val componentClasses = listOf(
+                Component0::class.java,
+                Component1::class.java
+            )
+            override fun createFor(entityId: EntityId) {
+                components[entityId] = listOf(
+                    Component0(5), Component1(2)
+                )
+            }
+        }
+
+        val entity = Entity()
+
+        entity.add(Component0::class.java)
+        entity.add(Component1::class.java)
+
+        assertTrue(entity.has(archetypes[0]))
+    }
 }

@@ -1,50 +1,48 @@
 package de.hanno.ecs
 
-interface Archetype<T> {
-    val componentClass: Class<T>
+interface Archetype {
+    val componentClasses: List<Class<*>>
 
     val id: Long
-    fun update(entityId: EntityId, component: T) {}
-
-    fun updateAlive() {}
 
     fun createFor(entityId: EntityId)
     fun deleteFor(entityId: EntityId)
 
-    fun correspondsTo(clazz: Class<*>) = clazz.isAssignableFrom(componentClass)
-    fun getFor(entityId: EntityId): T?
+    fun update() {}
+
+    fun correspondsTo(clazz: Class<*>) = componentClasses.any { clazz == it }
+    fun getFor(entityId: EntityId): List<*>?
 }
 
-abstract class ArchetypeImpl<T>(private val world: World): Archetype<T> {
-    override val id = world.entityCounter++
+abstract class ArchetypeImpl(private val world: World): Archetype {
+    override val id = world.run { ComponentId() }
 
-    protected val components = mutableMapOf<Long, T>()
+    protected val components = mutableMapOf<Long, List<Any>>()
 
     init {
         world.archetypes.add(this)
-    }
-
-    override fun updateAlive() = world.run {
-        components.filterAlive().forEach { (entityId, component) ->
-            update(entityId, component)
-        }
     }
 
     override fun deleteFor(entityId: EntityId) {
         components.remove(entityId)
     }
 
-    override fun getFor(entityId: EntityId): T? = components[entityId]
+    override fun getFor(entityId: EntityId): List<*>? = components[entityId]
 }
 
-abstract class PackedArchetype<T>(world: World): Archetype<T> {
-    override val id = world.entityCounter++
+interface PackedComponent
+abstract class PackedArchetype<T: PackedComponent>(private val clazz: Class<T>, world: World): Archetype {
+    override val id = world.run { ComponentId() }
 
     init {
         world.archetypes.add(this)
     }
 
     abstract fun on(entityId: EntityId, block: T.() -> Unit)
+
+    abstract fun getPackedFor(entityId: EntityId): T?
+
+    override fun correspondsTo(clazz: Class<*>) = clazz.isAssignableFrom(this.clazz)
 }
 
 context(World)

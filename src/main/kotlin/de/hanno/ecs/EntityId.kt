@@ -25,30 +25,35 @@ val Long.binaryString get() = toString(2).padStart(Long.SIZE_BITS, '0')
 val Long.shortBinaryString get() = toString(2).padStart(Int.SIZE_BITS, '0')
 
 context(World)
-fun <T> EntityId.has(archetype: Archetype<T>): Boolean = entityIndex[this]?.contains(archetype.id) ?: false
+fun EntityId.has(archetype: Archetype): Boolean = entityIndex[this]?.contains(archetype.id) ?: false
 
 context(World)
 fun <T> EntityId.get(clazz: Class<T>): T? {
+    // TODO: This assumes the first archetype for a given component saves it for an entity, which
+    // is not true, because the best fitting, most precise archetype saves it
+    // TODO: Implement 1) entityIndex lookup, 2) filter for components, 3) find archetype matching them
     val archeType = archetypes.first { it.correspondsTo(clazz) }
 
-    val resolvedComponent = archeType.getFor(this) as T?
+    val resolvedComponent = archeType.getFor(this)?.firstOrNull { clazz.isAssignableFrom(it!!.javaClass) } as T?
 
     return if(resolvedComponent != null) {
         resolvedComponent
     } else {
         val potentialInstanceOfs = entityIndex[this]?.filter { it.isInstanceOf } ?: emptyList()
-        val potentialComponents = potentialInstanceOfs.mapNotNull { archeType.getFor(it.targetInstance) as T? }
+        val potentialComponents = potentialInstanceOfs.mapNotNull {
+            archeType.getFor(it.targetInstance)?.firstOrNull { clazz.isAssignableFrom(it!!.javaClass) } as T?
+        }
         potentialComponents.firstOrNull()
     }
 }
 
 context(World)
-inline fun <reified T> EntityId.on(noinline block: T.() -> Unit) {
+inline fun <reified T: PackedComponent> EntityId.on(noinline block: T.() -> Unit) {
     on(T::class.java, block)
 }
 
 context(World)
-fun <T> EntityId.on(clazz: Class<T>, block: T.() -> Unit) {
+fun <T: PackedComponent> EntityId.on(clazz: Class<T>, block: T.() -> Unit) {
     val archeType = archetypes.filterIsInstance<PackedArchetype<T>>().firstOrNull { it.correspondsTo(clazz) }
 
     archeType?.on(this, block)
@@ -58,7 +63,15 @@ context(World)
 inline fun <reified T> EntityId.get(): T? = get(T::class.java)
 
 context(World)
-fun <T> EntityId.add(archetype: Archetype<T>) {
+fun EntityId.add(archetype: Archetype) {
+    entityIndex[this]!!.add(archetype.id)
+    archetype.createFor(this)
+}
+
+context(World)
+fun EntityId.add(clazz: Class<*>) {
+    val archetype = archetypes.first { it.correspondsTo(clazz) }
+
     entityIndex[this]!!.add(archetype.id)
     archetype.createFor(this)
 }
@@ -72,7 +85,7 @@ fun EntityId.delete() {
 }
 
 context(World)
-fun EntityId.remove(componentType: Archetype<*>) {
+fun EntityId.remove(componentType: Archetype) {
     entityIndex[this]!!.remove(componentType.id)
 }
 
