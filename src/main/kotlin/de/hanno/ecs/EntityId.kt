@@ -13,7 +13,7 @@ fun ComponentId(int: Int): Long = (int.toLong() shl idShiftBitCount) or 2L
 val Long.isEntity: Boolean get() = this[0]
 val Long.isComponent: Boolean get() = this[1] && !this[0]
 val Long.isInstanceOf: Boolean get() = this[1] && this[1]
-val Long.targetInstance: Long get() = idPart or 1L
+val Long.targetInstance: Long get() = (idPart shl idShiftBitCount ) or 1L
 
 context(World)
 fun EntityId.getBinaryStrings(): String {
@@ -29,9 +29,17 @@ fun <T> EntityId.has(archetype: Archetype<T>): Boolean = entityIndex[this]?.cont
 
 context(World)
 fun <T> EntityId.get(clazz: Class<T>): T? {
-    val archeType = archetypes.firstOrNull { it.correspondsTo(clazz) }
+    val archeType = archetypes.first { it.correspondsTo(clazz) }
 
-    return archeType?.getFor(this) as T?
+    val resolvedComponent = archeType.getFor(this) as T?
+
+    return if(resolvedComponent != null) {
+        resolvedComponent
+    } else {
+        val potentialInstanceOfs = entityIndex[this]?.filter { it.isInstanceOf } ?: emptyList()
+        val potentialComponents = potentialInstanceOfs.mapNotNull { archeType.getFor(it.targetInstance) as T? }
+        potentialComponents.firstOrNull()
+    }
 }
 
 context(World)

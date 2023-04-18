@@ -17,6 +17,7 @@ class ArcheTypeTest {
             override fun updateAlive() {}
             override fun createFor(entityId: EntityId) {}
             override fun deleteFor(entityId: EntityId) {}
+            override fun getFor(entityId: EntityId) = TODO("Not yet implemented")
         }
 
         assertTrue(archeType.correspondsTo(SubComponent::class.java))

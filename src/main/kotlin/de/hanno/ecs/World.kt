@@ -10,14 +10,14 @@ class World(
 
     internal var entityCounter = 0L
 
-    val entityCount: Int get() = entityCounter.toInt() - idsToRecycle.size
+    val entityCount: Int get() = entityIndex.size - idsToRecycle.size
 
     private fun allocateId(): Long = idsToRecycle.firstOrNull()?.apply {
         idsToRecycle.remove(this)
     } ?: (entityCounter++ shl idShiftBitCount)
 
     fun Entity(): Long {
-        val allocatedId = allocateId() or 1L
+        val allocatedId = allocateId().toEntityId()
 
         return allocatedId.apply {
             entityIndex[this] = mutableListOf()
@@ -27,6 +27,9 @@ class World(
     fun getEntity(id: EntityId) = if (entityIndex.containsKey(id)) id else null
 
     fun EntityId.setInstanceOf(other: EntityId) {
-        entityIndex[this]!!.add(other or 3L)
+        entityIndex[this]!!.add(other.toInstanceOfIdentifier())
     }
+
+    private fun EntityId.toInstanceOfIdentifier() = this or 3L
+    private fun Long.toEntityId() = this or 1L
 }

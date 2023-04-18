@@ -64,6 +64,9 @@ class EntityIdTest {
     @Test
     fun `instanceOf flag flags entity`() {
         World().run {
+            repeat(28) {
+                Entity()
+            }
             val entity0 = Entity()
             val entity1 = Entity()
             entity1.setInstanceOf(entity0)

@@ -1,10 +1,9 @@
 package de.hanno.ecs
 
 import org.junit.jupiter.api.DynamicTest
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestFactory
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
+import kotlin.test.*
 
 class ComponentTest {
     @TestFactory
@@ -35,5 +34,47 @@ class ComponentTest {
                 assertFalse(entity.has(componentType))
             }
         }
+    }
+
+    @Test
+    fun `instancing uses shared component`(): Unit = World().run {
+        val archeTypes = createArcheTypes()
+
+        val entity0 = Entity()
+        entity0.add(archeTypes[0])
+
+        val entity1 = Entity()
+        entity1.setInstanceOf(entity0)
+
+        val componentFromEntity0 = entity0.get(Component0::class.java)
+        val componentFromEntity1 = entity1.get(Component0::class.java)
+
+        assertNotNull(componentFromEntity0)
+        assertNotNull(componentFromEntity1)
+        assertEquals(componentFromEntity0, componentFromEntity1)
+    }
+
+    @Test
+    fun `instancing uses overridden component`(): Unit = World().run {
+        val archeTypes = createArcheTypes()
+
+        val entity0 = Entity().apply {
+            add(archeTypes[0])
+            add(archeTypes[1])
+        }
+
+        val entity1 = Entity().apply {
+            add(archeTypes[0])
+            setInstanceOf(entity0)
+        }
+
+        val componentFromEntity0 = entity0.get(Component0::class.java)
+        val componentFromEntity1 = entity1.get(Component0::class.java)
+        val componentSharedFromEntity0 = entity1.get(Component0::class.java)
+
+        assertNotNull(componentFromEntity0)
+        assertNotNull(componentFromEntity1)
+        assertNotNull(componentSharedFromEntity0)
+        assertNotEquals(componentFromEntity0, componentFromEntity1)
     }
 }
