@@ -27,7 +27,6 @@ class ComponentTest {
         (0..3).map {
             DynamicTest.dynamicTest("for $it") {
                 val entity = Entity()
-                val componentType = archetypes[it]
 
                 entity.add(Component0::class.java)
                 assertTrue(entity.has(Component0::class.java))

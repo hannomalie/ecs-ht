@@ -1,7 +1,8 @@
 package de.hanno.ecs
 
 interface Archetype {
-    val componentClasses: List<Class<*>>
+    val componentClasses: Set<Class<*>>
+    val componentIds: Set<Long>
 
     val id: Long
 
@@ -14,13 +15,15 @@ interface Archetype {
     fun getFor(entityId: EntityId): List<*>?
 }
 
+
 abstract class ArchetypeImpl(private val world: World): Archetype {
     override val id = world.run { ComponentId() }
 
-    protected val components = mutableMapOf<Long, List<Any>>()
+    protected val components: MutableMap<Long, List<Any>> = mutableMapOf()
+    override val componentIds: Set<Long> = mutableSetOf()
 
     init {
-        world.archetypes.add(this)
+        world.archetypes[componentIds] = this
     }
 
     override fun deleteFor(entityId: EntityId) {
@@ -35,7 +38,7 @@ abstract class PackedArchetype<T: PackedComponent>(private val clazz: Class<T>, 
     override val id = world.run { ComponentId() }
 
     init {
-        world.archetypes.add(this)
+        world.archetypes[componentIds] = this
     }
 
     abstract fun on(entityId: EntityId, block: T.() -> Unit)

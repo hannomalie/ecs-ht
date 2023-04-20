@@ -1,11 +1,14 @@
 package de.hanno.ecs
 
+import java.lang.reflect.Constructor
+
 class World(
     val maxEntityCount: Int = 100000,
 ) {
-    internal val archetypes = mutableListOf<Archetype>()
+    internal val archetypes = mutableMapOf<Set<Long>, Archetype>()
     internal val registeredComponents = mutableMapOf<Class<*>, Long>()
-    internal val entityIndex = mutableMapOf<EntityId, MutableList<Long>>()
+    internal val factories = mutableMapOf<Class<*>, Constructor<*>>()
+    internal val entityIndex = mutableMapOf<Long, MutableSet<Long>>()
 
     internal val idsToRecycle = mutableListOf<Long>()
 
@@ -15,7 +18,12 @@ class World(
 
     inline fun <reified T> register() = register(T::class.java)
 
-    fun register(clazz: Class<*>): Long = ComponentId().apply {
+    fun register(clazz: Class<*>): Long = if(clazz.isPacked) {
+        PackedComponentId()
+    } else {
+        factories[clazz] = clazz.constructors.first()
+        ComponentId()
+    }.apply {
         registeredComponents[clazz] = this
     }
 
@@ -27,14 +35,21 @@ class World(
         val allocatedId = allocateId().toEntityId()
 
         return allocatedId.apply {
-            entityIndex[this] = mutableListOf()
+            entityIndex[this] = mutableSetOf()
         }
     }
     fun ComponentId(): Long {
         val allocatedId = (entityCounter++ shl idShiftBitCount).toComponentId()
 
         return allocatedId.apply {
-            entityIndex[this] = mutableListOf()
+            entityIndex[this] = mutableSetOf()
+        }
+    }
+    fun PackedComponentId(): Long {
+        val allocatedId = (entityCounter++ shl idShiftBitCount).toPackedComponentId()
+
+        return allocatedId.apply {
+            entityIndex[this] = mutableSetOf()
         }
     }
 
@@ -47,4 +62,5 @@ class World(
     private fun EntityId.toInstanceOfIdentifier() = this or 3L
     private fun Long.toEntityId() = this or 1L
     private fun Long.toComponentId() = this or 2L
+    private fun Long.toPackedComponentId() = this or 2L or 4L
 }

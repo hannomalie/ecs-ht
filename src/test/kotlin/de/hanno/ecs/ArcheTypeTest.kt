@@ -12,7 +12,8 @@ class ArcheTypeTest {
     @Test
     fun `archetype corresponds to subclass only`() {
         val archeType = object: Archetype {
-            override val componentClasses = listOf(SubComponent::class.java)
+            override val componentClasses = setOf(SubComponent::class.java)
+            override val componentIds: Set<Long> get() = TODO("Not yet implemented")
 
             override val id: Long get() = TODO("Not yet implemented")
             override fun createFor(entityId: EntityId) {}
@@ -28,7 +29,8 @@ class ArcheTypeTest {
     @Test
     fun `packed archetype corresponds to subclass only`() {
         val archeType = object: Archetype {
-            override val componentClasses = listOf(SubComponent::class.java)
+            override val componentClasses = setOf(SubComponent::class.java)
+            override val componentIds: Set<Long> get() = TODO("Not yet implemented")
 
             override val id: Long get() = TODO("Not yet implemented")
             override fun createFor(entityId: EntityId) {}

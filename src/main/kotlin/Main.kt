@@ -22,7 +22,7 @@ fun main() {
             val entityCount = entities.size
             run {
                 val start = System.currentTimeMillis()
-                archetypes.forEach { it.update() }
+                archetypes.values.forEach { it.update() }
                 println("Update $entityCount entities took ${System.currentTimeMillis() - start} ms")
             }
             run {
@@ -67,14 +67,14 @@ fun main() {
 
 data class PositionComponent(var a: Int = 0)
 class PositionArchetype(world: World) : ArchetypeImpl(world) {
-    override val componentClasses = listOf(PositionComponent::class.java)
+    override val componentClasses = setOf(PositionComponent::class.java)
 
     override fun createFor(entityId: EntityId) {
-        components[entityId] = listOf(PositionComponent())
+        components.put(entityId, listOf(PositionComponent()))
     }
     override fun update() {
-        components.forEach { (_, componentsForEntity) ->
-            val positionComponent = componentsForEntity[0] as PositionComponent
+        components.forEach {
+            val positionComponent = it.value[0] as PositionComponent
             positionComponent.a += 1
         }
     }
@@ -82,32 +82,23 @@ class PositionArchetype(world: World) : ArchetypeImpl(world) {
 
 data class Velocity(var b: Int = 1)
 
-class PositionVelocityArchetype(world: World) : ArchetypeImpl(world) {
-    override val componentClasses = listOf(PositionComponent::class.java, Velocity::class.java)
-
-    override fun createFor(entityId: EntityId) {
-        components[entityId] = listOf(PositionComponent(5), Velocity(2))
-    }
-
-    override fun update() {
-        components.forEach { (_, componentsForEntity) ->
-            componentsForEntity.forEach {
-                when(it) {
-                    is PositionComponent -> it.a += 1
-                    is Velocity -> it.b -= 1
-                }
-            }
-        }
-    }
-}
-
 interface PositionVelocityPacked: PackedComponent {
     var a: Int
     var b: Int
 }
 
 class PositionVelocityPackedArchetype(private val world: World): PackedArchetype<PositionVelocityPacked>(PositionVelocityPacked::class.java, world) {
-    override val componentClasses = listOf(PositionVelocityPacked::class.java)
+    init {
+        world.register(PositionVelocityPacked::class.java)
+    }
+
+    override val componentClasses = setOf(PositionVelocityPacked::class.java)
+    override val componentIds = setOf(world.registeredComponents[PositionVelocityPacked::class.java]!!)
+
+    init {
+        world.archetypes[componentIds] = this
+    }
+
     private val entities = mutableMapOf<EntityId, Int>()
     private var currentIndex = 0
     private val buffer = ByteBuffer.allocateDirect(Int.MAX_VALUE)

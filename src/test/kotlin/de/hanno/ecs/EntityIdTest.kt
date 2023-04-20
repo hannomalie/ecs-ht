@@ -62,6 +62,13 @@ class EntityIdTest {
     }
 
     @Test
+    fun `packed component flag flags component id`() {
+        assertTrue(PackedComponentId(0).isComponent)
+        assertTrue(PackedComponentId(0).isPackedComponent)
+        assertFalse(0L.isPackedComponent)
+    }
+
+    @Test
     fun `instanceOf flag flags entity`() {
         World().run {
             repeat(28) {
@@ -85,31 +92,31 @@ class Component3(var a: Int = 0)
 
 fun World.createArcheTypes(): MutableList<ArchetypeImpl> = mutableListOf(
     object: ArchetypeImpl(this) {
-        override val componentClasses = listOf(Component0::class.java)
+        override val componentClasses = setOf(Component0::class.java)
         override fun createFor(entityId: EntityId) {
             components[entityId] = listOf(Component0(5))
         }
     },
     object: ArchetypeImpl(this) {
-        override val componentClasses = listOf(Component1::class.java)
+        override val componentClasses = setOf(Component1::class.java)
         override fun createFor(entityId: EntityId) {
             components[entityId] = listOf(Component1(5))
         }
     },
     object: ArchetypeImpl(this) {
-        override val componentClasses = listOf(Component2::class.java)
+        override val componentClasses = setOf(Component2::class.java)
         override fun createFor(entityId: EntityId) {
             components[entityId] = listOf(Component2(5))
         }
     },
     object: ArchetypeImpl(this) {
-        override val componentClasses = listOf(Component3::class.java)
+        override val componentClasses = setOf(Component3::class.java)
         override fun createFor(entityId: EntityId) {
             components[entityId] = listOf(Component3(5))
         }
     },
     object: ArchetypeImpl(this) {
-        override val componentClasses = listOf(Component0::class.java, Component1::class.java)
+        override val componentClasses = setOf(Component0::class.java, Component1::class.java)
         override fun createFor(entityId: EntityId) {
             components[entityId] = listOf(
                 Component0(5),
