@@ -1,5 +1,6 @@
 package de.hanno.ecs
 
+import com.carrotsearch.hppc.LongObjectHashMap
 import java.lang.IllegalStateException
 
 interface Archetype {
@@ -20,7 +21,10 @@ interface Archetype {
 }
 
 
-abstract class ArchetypeImpl(private val world: World): Archetype {
+class ArchetypeImpl(
+    private val world: World,
+    override val componentClasses: Set<Class<out Any>>
+): Archetype {
     protected val components: MutableMap<Long, List<Any>> = mutableMapOf()
 
     override fun has(entity: EntityId): Boolean = components.containsKey(entity)
@@ -47,10 +51,22 @@ abstract class ArchetypeImpl(private val world: World): Archetype {
             block(it.key, components.filterIsInstance(classA).first(), components.filterIsInstance(classB).first())
         }
     }
+
+    override fun createFor(entityId: EntityId) {
+        this.components[entityId] = this.componentClasses.map {
+            world.factories[it]!!.newInstance()
+        }
+    }
+
+    override fun createFor(entityId: EntityId, currentComponents: List<Any>) {
+        this.components[entityId] = this.componentClasses.map {
+            currentComponents.filterIsInstance(it).firstOrNull() ?: world.factories[it]!!.newInstance()
+        }
+    }
 }
 
-abstract class SingleComponentArchetypeImpl(private val world: World, protected val componentClazz: Class<out Any>): Archetype {
-    protected val components: MutableMap<Long, Any> = mutableMapOf() // TODO: Boxing happens here, implement a LongMap
+abstract class SingleComponentArchetypeImpl(world: World, protected val componentClazz: Class<out Any>): Archetype {
+    protected val components = LongObjectHashMap<Any>()
 
     override fun has(entity: EntityId): Boolean = components.containsKey(entity)
     init {
@@ -66,8 +82,8 @@ abstract class SingleComponentArchetypeImpl(private val world: World, protected 
     override fun <A: Any> forEntities(classA: Class<A>, block: (EntityId, A) -> Unit) {
         if(classA != componentClazz) return
 
-        components.forEach {
-            block(it.key, it.value as A)
+        components.forEach { cursor ->
+            block(cursor.key, cursor.value as A)
         }
     }
 

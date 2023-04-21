@@ -78,9 +78,9 @@ class EntityIdTest {
             val entity1 = Entity()
             entity1.setInstanceOf(entity0)
 
-            val savedIdentifier = entityIndex[entity1]!![0]
-            assertTrue(savedIdentifier.isInstanceOf)
-            assertEquals(savedIdentifier.targetInstance, entity0)
+            val savedIdentifier = TODO("Retrieve identiifer not yet implemented")
+//            assertTrue(savedIdentifier.isInstanceOf)
+//            assertEquals(savedIdentifier.targetInstance, entity0)
         }
     }
 }
@@ -91,37 +91,9 @@ class Component2(var a: Int = 0)
 class Component3(var a: Int = 0)
 
 fun World.createArcheTypes(): MutableList<ArchetypeImpl> = mutableListOf(
-    object: ArchetypeImpl(this) {
-        override val componentClasses = setOf(Component0::class.java)
-        override fun createFor(entityId: EntityId) {
-            components[entityId] = listOf(Component0(5))
-        }
-    },
-    object: ArchetypeImpl(this) {
-        override val componentClasses = setOf(Component1::class.java)
-        override fun createFor(entityId: EntityId) {
-            components[entityId] = listOf(Component1(5))
-        }
-    },
-    object: ArchetypeImpl(this) {
-        override val componentClasses = setOf(Component2::class.java)
-        override fun createFor(entityId: EntityId) {
-            components[entityId] = listOf(Component2(5))
-        }
-    },
-    object: ArchetypeImpl(this) {
-        override val componentClasses = setOf(Component3::class.java)
-        override fun createFor(entityId: EntityId) {
-            components[entityId] = listOf(Component3(5))
-        }
-    },
-    object: ArchetypeImpl(this) {
-        override val componentClasses = setOf(Component0::class.java, Component1::class.java)
-        override fun createFor(entityId: EntityId) {
-            components[entityId] = listOf(
-                Component0(5),
-                Component1()
-            )
-        }
-    },
+    ArchetypeImpl(this, setOf(Component0::class.java)),
+    ArchetypeImpl(this, setOf(Component1::class.java)),
+    ArchetypeImpl(this, setOf(Component2::class.java)),
+    ArchetypeImpl(this, setOf(Component3::class.java)),
+    ArchetypeImpl(this, setOf(Component0::class.java, Component1::class.java)),
 )

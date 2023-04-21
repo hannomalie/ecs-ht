@@ -31,6 +31,10 @@ class World {
     fun Entity(): Long = allocateId().toEntityId()
 
     private fun Long.toEntityId() = this or 1L
+
+    fun EntityId.setInstanceOf(target: EntityId) {
+        // TODO: Implement me
+    }
 }
 
 inline fun <reified A: Any> World.forEntitiesWith(noinline block: (EntityId, A) -> Unit) {

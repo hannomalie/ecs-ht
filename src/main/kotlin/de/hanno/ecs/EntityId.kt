@@ -110,31 +110,17 @@ private fun EntityId.getOrCreateArchetype(componentClasses: Set<Class<out Any>>)
                 override val componentClasses = componentClasses
 
                 override fun createFor(entityId: EntityId) {
-                    components[entityId] = componentClasses.map {factories[it]!!.newInstance() }
+                    components.put(entityId, componentClasses.map {factories[it]!!.newInstance() })
                 }
 
                 override fun createFor(entityId: EntityId, currentComponents: List<Any>) {
-                    components[entityId] = currentComponents.filterIsInstance(componentClazz).firstOrNull() ?: factories[componentClazz]!!.newInstance()
+                    components.put(entityId, currentComponents.filterIsInstance(componentClazz).firstOrNull() ?: factories[componentClazz]!!.newInstance())
                 }
 
                 override fun correspondsTo(clazz: Class<*>): Boolean = componentClazz == clazz
             }
         } else {
-            object : ArchetypeImpl(this@World) {
-                override val componentClasses: Set<Class<*>> = componentClasses
-
-                override fun createFor(entityId: EntityId) {
-                    this.components[entityId] = this.componentClasses.map {
-                        factories[it]!!.newInstance()
-                    }
-                }
-
-                override fun createFor(entityId: EntityId, currentComponents: List<Any>) {
-                    this.components[entityId] = this.componentClasses.map {
-                        currentComponents.filterIsInstance(it).firstOrNull() ?: factories[it]!!.newInstance()
-                    }
-                }
-            }
+            ArchetypeImpl(this@World, componentClasses)
         }
         newArchetype
     }

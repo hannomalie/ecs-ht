@@ -14,6 +14,7 @@ repositories {
 }
 
 dependencies {
+    implementation("com.carrotsearch:hppc:0.9.1")
     testImplementation(kotlin("test"))
 }
 
