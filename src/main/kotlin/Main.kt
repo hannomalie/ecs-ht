@@ -1,8 +1,6 @@
+import com.carrotsearch.hppc.LongIntHashMap
 import de.hanno.ecs.*
-import java.lang.IllegalStateException
 import java.nio.ByteBuffer
-import kotlin.contracts.ExperimentalContracts
-import kotlin.contracts.contract
 
 fun main() {
     val maxEntityCount = 100000
@@ -11,6 +9,7 @@ fun main() {
         println("======================")
 
         World().apply {
+            register(PositionVelocityPacked::class.java)
             PositionVelocityPackedArchetype(this)
 
             var entities: List<Long>? = null
@@ -124,13 +123,9 @@ interface PositionVelocityPacked: PackedComponent {
 }
 
 class PositionVelocityPackedArchetype(private val world: World): PackedArchetype<PositionVelocityPacked>(PositionVelocityPacked::class.java, world) {
-    init {
-        world.register(PositionVelocityPacked::class.java)
-    }
-
     override val componentClasses = setOf(PositionVelocityPacked::class.java)
 
-    private val entities = mutableMapOf<EntityId, Int>()
+    private val entities = LongIntHashMap()
     private var currentIndex = 0
     private val buffer = ByteBuffer.allocateDirect(Int.MAX_VALUE)
 
@@ -152,7 +147,7 @@ class PositionVelocityPackedArchetype(private val world: World): PackedArchetype
     }
 
     override fun createFor(entityId: EntityId) {
-        entities[entityId] = entities.size
+        entities.put(entityId, entities.size())
     }
 
     override fun createFor(entityId: EntityId, currentComponents: List<Any>) {
@@ -165,8 +160,8 @@ class PositionVelocityPackedArchetype(private val world: World): PackedArchetype
     }
 
     override fun on(entityId: EntityId, block: PositionVelocityPacked.() -> Unit) = world.run {
-        val index = entities.getOrDefault(entityId, null)
-        if(index != null) {
+        val index = entities.getOrDefault(entityId, -1)
+        if(index != -1) {
             if(entityId.isAlive) {
                 buffer.position(index * (2 * Int.SIZE_BYTES))
                 slidingWindow.block()
@@ -174,9 +169,9 @@ class PositionVelocityPackedArchetype(private val world: World): PackedArchetype
         }
     }
     override fun getFor(entityId: EntityId): List<Any>? = world.run {
-        val index = entities.getOrDefault(entityId, null)
+        val index = entities.getOrDefault(entityId, -1)
 
-        return if(index != null) {
+        return if(index != -1) {
             if(entityId.isAlive) {
                 buffer.position(index * (2 * Int.SIZE_BYTES))
                 listOf(slidingWindow)
@@ -195,9 +190,9 @@ class PositionVelocityPackedArchetype(private val world: World): PackedArchetype
     override fun has(entity: EntityId): Boolean = entities.containsKey(entity)
 
     override fun getPackedFor(entityId: EntityId): PositionVelocityPacked? = world.run {
-        val index = entities.getOrDefault(entityId, null)
+        val index = entities.getOrDefault(entityId, -1)
 
-        return if(index != null) {
+        return if(index != -1) {
             if(entityId.isAlive) {
                 buffer.position(index * (2 * Int.SIZE_BYTES))
                 slidingWindow

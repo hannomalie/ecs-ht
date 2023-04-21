@@ -25,7 +25,7 @@ class ArchetypeImpl(
     private val world: World,
     override val componentClasses: Set<Class<out Any>>
 ): Archetype {
-    protected val components: MutableMap<Long, List<Any>> = mutableMapOf()
+    private val components: MutableMap<Long, List<Any>> = mutableMapOf()
 
     override fun has(entity: EntityId): Boolean = components.containsKey(entity)
     init {
@@ -65,13 +65,15 @@ class ArchetypeImpl(
     }
 }
 
-abstract class SingleComponentArchetypeImpl(world: World, protected val componentClazz: Class<out Any>): Archetype {
+class SingleComponentArchetypeImpl(private val world: World, private val componentClazz: Class<out Any>): Archetype {
     protected val components = LongObjectHashMap<Any>()
+    override val componentClasses = setOf(componentClazz)
 
-    override fun has(entity: EntityId): Boolean = components.containsKey(entity)
     init {
         world.archetypes.add(this)
     }
+
+    override fun has(entity: EntityId): Boolean = components.containsKey(entity)
 
     override fun deleteFor(entityId: EntityId) {
         components.remove(entityId)
@@ -86,6 +88,16 @@ abstract class SingleComponentArchetypeImpl(world: World, protected val componen
             block(cursor.key, cursor.value as A)
         }
     }
+
+    override fun createFor(entityId: EntityId) {
+        components.put(entityId, componentClasses.map {world.factories[it]!!.newInstance() })
+    }
+
+    override fun createFor(entityId: EntityId, currentComponents: List<Any>) {
+        components.put(entityId, currentComponents.filterIsInstance(componentClazz).firstOrNull() ?: world.factories[componentClazz]!!.newInstance())
+    }
+
+    override fun correspondsTo(clazz: Class<*>): Boolean = componentClazz == clazz
 
     override fun <A: Any, B: Any> forEntities(classA: Class<A>, classB: Class<B>, block: (EntityId, A, B) -> Unit) {
         throw IllegalStateException("Should never iterate multiple components in this kind of archetype (single component)")

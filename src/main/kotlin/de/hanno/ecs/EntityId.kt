@@ -70,12 +70,10 @@ fun EntityId.add(clazz: Class<*>) {
 context(World)
 fun EntityId.move(currentArchetype: Archetype?, clazz: Class<out Any>) {
     val currentComponents = currentArchetype?.getFor(this) ?: emptyList()
+    val componentClasses = if (currentArchetype == null) setOf(clazz) else currentArchetype.componentClasses + clazz
 
-    val archetype = getOrCreateArchetype(if(currentArchetype == null) {
-        setOf(clazz)
-    } else {
-      currentArchetype.componentClasses + clazz
-    })
+    val archetype = getOrCreateArchetype(componentClasses)
+
     archetype.createFor(this, currentComponents)
     currentArchetype?.deleteFor(this)
     // TODO: Move over old components
@@ -103,28 +101,12 @@ context(World)
 private fun EntityId.getArchetype(clazz: Class<*>) = archetypes.first { it.correspondsTo(clazz) && it.has(this) }
 
 context(World)
-private fun EntityId.getOrCreateArchetype(componentClasses: Set<Class<out Any>>): Archetype {
-    val archeType = archetypes.firstOrNull { it.componentClasses == componentClasses } ?: run {
-        val newArchetype = if(componentClasses.size == 1) {
-            object: SingleComponentArchetypeImpl(this@World, componentClasses.first()) {
-                override val componentClasses = componentClasses
-
-                override fun createFor(entityId: EntityId) {
-                    components.put(entityId, componentClasses.map {factories[it]!!.newInstance() })
-                }
-
-                override fun createFor(entityId: EntityId, currentComponents: List<Any>) {
-                    components.put(entityId, currentComponents.filterIsInstance(componentClazz).firstOrNull() ?: factories[componentClazz]!!.newInstance())
-                }
-
-                override fun correspondsTo(clazz: Class<*>): Boolean = componentClazz == clazz
-            }
-        } else {
-            ArchetypeImpl(this@World, componentClasses)
-        }
-        newArchetype
-    }
-    return archeType
+private fun EntityId.getOrCreateArchetype(componentClasses: Set<Class<out Any>>): Archetype = archetypes.firstOrNull {
+    it.componentClasses == componentClasses
+} ?: if (componentClasses.size == 1) {
+    SingleComponentArchetypeImpl(this@World, componentClasses.first())
+} else {
+    ArchetypeImpl(this@World, componentClasses)
 }
 
 context(World)
