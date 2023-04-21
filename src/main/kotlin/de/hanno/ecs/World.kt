@@ -5,15 +5,15 @@ import java.lang.reflect.Constructor
 class World {
     @PublishedApi
     internal val archetypes = mutableSetOf<Archetype>()
-    internal val instanceOfs = mutableMapOf<Long, Long>()
+    internal val instanceOfs = mutableMapOf<Int, Int>()
     internal val registeredComponents = mutableSetOf<Class<*>>()
     internal val factories = mutableMapOf<Class<*>, Constructor<*>>()
 
-    internal val idsToRecycle = mutableListOf<Long>()
+    internal val idsToRecycle = mutableListOf<Int>()
 
-    internal var entityCounter = 0L
+    internal var entityCounter = 0
 
-    val entityCount: Int get() = entityCounter.toInt() - idsToRecycle.size
+    val entityCount: Int get() = entityCounter - idsToRecycle.size
 
     inline fun <reified T> register() = register(T::class.java)
 
@@ -24,13 +24,11 @@ class World {
         registeredComponents.add(clazz)
     }
 
-    private fun allocateId(): Long = idsToRecycle.firstOrNull()?.apply {
+    private fun allocateId(): Int = idsToRecycle.firstOrNull()?.apply {
         idsToRecycle.remove(this)
-    } ?: (entityCounter++ shl idShiftBitCount)
+    } ?: entityCounter++
 
-    fun Entity(): Long = allocateId().toEntityId()
-
-    private fun Long.toEntityId() = this or 1L
+    fun Entity(): Int = allocateId()
 
     fun EntityId.setInstanceOf(target: EntityId) {
         // TODO: Implement me

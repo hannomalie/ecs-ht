@@ -1,7 +1,6 @@
 package de.hanno.ecs
 
-import com.carrotsearch.hppc.LongObjectHashMap
-import java.lang.IllegalStateException
+import com.carrotsearch.hppc.IntObjectHashMap
 
 interface Archetype {
     val componentClasses: Set<Class<*>>
@@ -25,7 +24,7 @@ class ArchetypeImpl(
     private val world: World,
     override val componentClasses: Set<Class<out Any>>
 ): Archetype {
-    private val components: MutableMap<Long, List<Any>> = mutableMapOf()
+    private val components = IntObjectHashMap<List<Any>>()
 
     override fun has(entity: EntityId): Boolean = components.containsKey(entity)
     init {
@@ -53,20 +52,20 @@ class ArchetypeImpl(
     }
 
     override fun createFor(entityId: EntityId) {
-        this.components[entityId] = this.componentClasses.map {
+        components.put(entityId, componentClasses.map {
             world.factories[it]!!.newInstance()
-        }
+        })
     }
 
     override fun createFor(entityId: EntityId, currentComponents: List<Any>) {
-        this.components[entityId] = this.componentClasses.map {
+        components.put(entityId, componentClasses.map {
             currentComponents.filterIsInstance(it).firstOrNull() ?: world.factories[it]!!.newInstance()
-        }
+        })
     }
 }
 
 class SingleComponentArchetypeImpl(private val world: World, private val componentClazz: Class<out Any>): Archetype {
-    protected val components = LongObjectHashMap<Any>()
+    protected val components = IntObjectHashMap<Any>()
     override val componentClasses = setOf(componentClazz)
 
     init {
@@ -115,9 +114,4 @@ abstract class PackedArchetype<T: PackedComponent>(private val clazz: Class<T>, 
     abstract fun getPackedFor(entityId: EntityId): T?
 
     override fun correspondsTo(clazz: Class<*>) = clazz == this.clazz
-}
-
-context(World)
-fun <T> MutableMap<Long, T>.filterAlive() = filterKeys {
-    it.isAlive
 }

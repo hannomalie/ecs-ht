@@ -58,7 +58,7 @@ class ComponentTest {
 
     @Test
     fun `instancing uses overridden component`(): Unit = World().run {
-        val archeTypes = createArcheTypes()
+        createArcheTypes()
         register<Component0>()
         register<Component1>()
 

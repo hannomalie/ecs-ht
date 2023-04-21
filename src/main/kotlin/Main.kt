@@ -1,3 +1,4 @@
+import com.carrotsearch.hppc.IntIntHashMap
 import com.carrotsearch.hppc.LongIntHashMap
 import de.hanno.ecs.*
 import java.nio.ByteBuffer
@@ -12,7 +13,7 @@ fun main() {
             register(PositionVelocityPacked::class.java)
             PositionVelocityPackedArchetype(this)
 
-            var entities: List<Long>? = null
+            var entities: List<Int>? = null
             timed {
                 val result = (0 until maxEntityCount).map {
                     Entity().apply {
@@ -125,7 +126,7 @@ interface PositionVelocityPacked: PackedComponent {
 class PositionVelocityPackedArchetype(private val world: World): PackedArchetype<PositionVelocityPacked>(PositionVelocityPacked::class.java, world) {
     override val componentClasses = setOf(PositionVelocityPacked::class.java)
 
-    private val entities = LongIntHashMap()
+    private val entities = IntIntHashMap()
     private var currentIndex = 0
     private val buffer = ByteBuffer.allocateDirect(Int.MAX_VALUE)
 
@@ -162,20 +163,16 @@ class PositionVelocityPackedArchetype(private val world: World): PackedArchetype
     override fun on(entityId: EntityId, block: PositionVelocityPacked.() -> Unit) = world.run {
         val index = entities.getOrDefault(entityId, -1)
         if(index != -1) {
-            if(entityId.isAlive) {
-                buffer.position(index * (2 * Int.SIZE_BYTES))
-                slidingWindow.block()
-            }
+            buffer.position(index * (2 * Int.SIZE_BYTES))
+            slidingWindow.block()
         }
     }
     override fun getFor(entityId: EntityId): List<Any>? = world.run {
         val index = entities.getOrDefault(entityId, -1)
 
         return if(index != -1) {
-            if(entityId.isAlive) {
-                buffer.position(index * (2 * Int.SIZE_BYTES))
-                listOf(slidingWindow)
-            } else null
+            buffer.position(index * (2 * Int.SIZE_BYTES))
+            listOf(slidingWindow)
         } else null
     }
 
@@ -193,10 +190,8 @@ class PositionVelocityPackedArchetype(private val world: World): PackedArchetype
         val index = entities.getOrDefault(entityId, -1)
 
         return if(index != -1) {
-            if(entityId.isAlive) {
-                buffer.position(index * (2 * Int.SIZE_BYTES))
-                slidingWindow
-            } else null
+            buffer.position(index * (2 * Int.SIZE_BYTES))
+            slidingWindow
         } else null
     }
 }
