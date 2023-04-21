@@ -1,81 +1,119 @@
 import de.hanno.ecs.*
 import java.lang.IllegalStateException
 import java.nio.ByteBuffer
+import kotlin.contracts.ExperimentalContracts
+import kotlin.contracts.contract
 
 fun main() {
+    val maxEntityCount = 100000
+
     repeat(1000) {
+        println("======================")
 
         World().apply {
             PositionVelocityPackedArchetype(this)
 
-            val entities = run {
-                val start = System.currentTimeMillis()
-                val entities = (0 until maxEntityCount).map {
+            var entities: List<Long>? = null
+            timed {
+                val result = (0 until maxEntityCount).map {
                     Entity().apply {
                         add(PositionComponent::class.java)
-                        add(Velocity::class.java)
-                        add(PositionVelocityPacked::class.java)
+                        if(it.toFloat() / maxEntityCount.toFloat() > 0.5) {
+                            add(Velocity::class.java)
+                        }
+                        if (it.toFloat() / maxEntityCount.toFloat() > 0.75) {
+                            add(PositionVelocityPacked::class.java)
+                        }
                     }
                 }
-                println("Creating $maxEntityCount entities took ${System.currentTimeMillis() - start} ms")
-                entities
+                entities = result
+                "Creating $maxEntityCount entities took %d ms"
             }
-            val entityCount = entities.size
-            run {
-                val start = System.currentTimeMillis()
-                archetypes.forEach { it.update() }
-                println("Update $entityCount entities took ${System.currentTimeMillis() - start} ms")
-            }
-            run {
-                val start = System.currentTimeMillis()
-                entities.forEach { entity ->
+            println("=======")
+
+            timed {
+                var counter = 0
+                entities!!.forEach { entity ->
                     entity.get(PositionComponent::class.java)!!.apply {
                         a += 1
+                        counter++
                     }
                 }
-                println("Accessing $entityCount normal components took ${System.currentTimeMillis() - start} ms")
+                "Accessing $counter components with entity.get took %d ms"
             }
-            run {
-                val start = System.currentTimeMillis()
-                entities.forEach { entity ->
+            timed {
+                var counter = 0
+                entities!!.forEach { entity ->
+                    entity.get<PositionVelocityPacked>()?.apply {
+                        a += 1
+                        counter++
+                    }
+                }
+                "Accessing $counter packed components with entity.get took %d ms"
+            }
+            timed {
+                var counter = 0
+                entities!!.forEach { entity ->
                     entity.on<PositionVelocityPacked> {
                         a += 1
+                        counter++
                     }
                 }
-                println("Accessing $entityCount packed components with block took ${System.currentTimeMillis() - start} ms")
+                "Accessing $counter packed components with entity.on took %d ms"
             }
-            run {
-                val start = System.currentTimeMillis()
-                entities.forEach { entity ->
-                    entity.get<PositionVelocityPacked>()!!.apply {
-                        a += 1
-                    }
+            println("=======")
+            timed {
+                var counter = 0
+                forEntitiesWith<PositionVelocityPacked> { _, component ->
+                    component.a += 1
+                    counter++
                 }
-                println("Accessing $entityCount packed components normally took ${System.currentTimeMillis() - start} ms")
+                "Accessing $counter packed components with forEntitiesWith<PositionVelocityPacked> took %d ms"
             }
-            run {
-                val start = System.currentTimeMillis()
-                entities.forEach { entity ->
-                    entity.get<PositionVelocityPacked>()!!.apply {
-                        a += 1
-                    }
+            timed {
+                var counter = 0
+                forEntitiesWith<PositionComponent> { _, position ->
+                    position.a++
+                    counter++
                 }
-                println("Accessing $entityCount packed components from world normally took ${System.currentTimeMillis() - start} ms")
+                "Updating $counter entities with one component took %d ms"
             }
-            run {
-                val start = System.currentTimeMillis()
+            timed {
                 var counter = 0
                 forEntitiesWith<PositionComponent, Velocity> { _, position, velocity ->
                     position.a++
                     velocity.b++
                     counter++
                 }
-                println("Updating $counter entities with two components took ${System.currentTimeMillis() - start} ms")
+                "Updating $counter entities with two components took %d ms"
+            }
+            timed {
+                var counter = 0
+                entities!!.forEach { entity ->
+                    entity.remove(PositionComponent::class.java)
+                    counter++
+                }
+                "Removing one component from $counter entities with two components took %d ms"
+            }
+            timed {
+                var counter = 0
+                forEntitiesWith<Velocity> { _, velocity ->
+                    velocity.b++
+                    counter++
+                }
+                "Updating one component after removing one from $counter entities with two components took %d ms"
             }
         }
     }
 }
 
+inline fun timed(block: () -> String) {
+    val start = System.currentTimeMillis()
+    val message = block()
+    val durationMs = System.currentTimeMillis() - start
+
+    println(String.format(message, durationMs))
+}
 data class PositionComponent(var a: Int = 0)
 
 data class Velocity(var b: Int = 1)
@@ -117,7 +155,7 @@ class PositionVelocityPackedArchetype(private val world: World): PackedArchetype
         entities[entityId] = entities.size
     }
 
-    override fun createFor(entityId: EntityId, currentComponentes: List<Any>) {
+    override fun createFor(entityId: EntityId, currentComponents: List<Any>) {
         // TODO: Figure out if it's ok to ignore currentComponents
         createFor(entityId)
     }
@@ -146,11 +184,11 @@ class PositionVelocityPackedArchetype(private val world: World): PackedArchetype
         } else null
     }
 
-    override fun <A : Any> forEntities(block: (EntityId, A) -> Unit) {
+    override fun <A : Any> forEntities(classA: Class<A>, block: (EntityId, A) -> Unit) {
         entities.forEach { block(it.key, getFor(it.key)!![0] as A) }
     }
 
-    override fun <A : Any, B : Any> forEntities(block: (EntityId, A, B) -> Unit) {
+    override fun <A : Any, B : Any> forEntities(classA: Class<A>, classB: Class<B>, block: (EntityId, A, B) -> Unit) {
         throw IllegalStateException("Packed archetypes should never expect to iterate multiple component rows!")
     }
 
@@ -166,20 +204,4 @@ class PositionVelocityPackedArchetype(private val world: World): PackedArchetype
             } else null
         } else null
     }
-
-    override fun update() = world.run {
-        currentIndex = 0
-        buffer.position(0)
-
-        entities.keys.forEach { entityId ->
-            if(entityId.isAlive) {
-                getPackedFor(entityId)?.apply {
-                    a += 1
-                    b += 2
-                }
-            }
-            currentIndex++
-        }
-    }
-
 }

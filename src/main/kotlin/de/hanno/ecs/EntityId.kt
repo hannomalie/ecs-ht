@@ -32,9 +32,9 @@ fun EntityId.has(componentClass: Class<*>): Boolean = archetypes.any { it.compon
 
 context(World)
 fun <T> EntityId.get(clazz: Class<T>): T? {
-    val archeType = if(clazz.isPacked) getPackedArchetype(clazz as Class<PackedComponent>) else getArchetypes().first { it.correspondsTo(clazz) } // TODO: Is it okay to take the first here?
+    val archeType = if(clazz.isPacked) getPackedArchetype(clazz as Class<PackedComponent>) else getArchetype(clazz)
 
-    val resolvedComponent = archeType.getFor(this)?.firstOrNull { clazz.isAssignableFrom(it!!.javaClass) } as T?
+    val resolvedComponent = archeType.getFor(this)?.firstOrNull { clazz.isAssignableFrom(it.javaClass) } as T?
 
     return if(resolvedComponent != null) {
         resolvedComponent
@@ -68,7 +68,7 @@ fun EntityId.add(clazz: Class<*>) {
 }
 
 context(World)
-fun EntityId.move(currentArchetype: Archetype?, clazz: Class<*>) {
+fun EntityId.move(currentArchetype: Archetype?, clazz: Class<out Any>) {
     val currentComponents = currentArchetype?.getFor(this) ?: emptyList()
 
     val archetype = getOrCreateArchetype(if(currentArchetype == null) {
@@ -77,6 +77,7 @@ fun EntityId.move(currentArchetype: Archetype?, clazz: Class<*>) {
       currentArchetype.componentClasses + clazz
     })
     archetype.createFor(this, currentComponents)
+    currentArchetype?.deleteFor(this)
     // TODO: Move over old components
 }
 
@@ -98,20 +99,40 @@ context(World)
 private fun EntityId.getArchetypes() = archetypes.filter { it.has(this) }
 
 context(World)
-private fun EntityId.getOrCreateArchetype(componentClasses: Set<Class<*>>): Archetype {
+// TODO: Is it okay to take the first here?
+private fun EntityId.getArchetype(clazz: Class<*>) = archetypes.first { it.correspondsTo(clazz) && it.has(this) }
+
+context(World)
+private fun EntityId.getOrCreateArchetype(componentClasses: Set<Class<out Any>>): Archetype {
     val archeType = archetypes.firstOrNull { it.componentClasses == componentClasses } ?: run {
-        val newArchetype = object : ArchetypeImpl(this@World) {
-            override val componentClasses: Set<Class<*>> = componentClasses
+        val newArchetype = if(componentClasses.size == 1) {
+            object: SingleComponentArchetypeImpl(this@World, componentClasses.first()) {
+                override val componentClasses = componentClasses
 
-            override fun createFor(entityId: EntityId) {
-                this.components[entityId] = this.componentClasses.map {
-                    factories[it]!!.newInstance()
+                override fun createFor(entityId: EntityId) {
+                    components[entityId] = componentClasses.map {factories[it]!!.newInstance() }
                 }
-            }
 
-            override fun createFor(entityId: EntityId, currentComponentes: List<Any>) {
-                this.components[entityId] = this.componentClasses.map {
-                    currentComponentes.filterIsInstance(it).firstOrNull() ?: factories[it]!!.newInstance()
+                override fun createFor(entityId: EntityId, currentComponents: List<Any>) {
+                    components[entityId] = currentComponents.filterIsInstance(componentClazz).firstOrNull() ?: factories[componentClazz]!!.newInstance()
+                }
+
+                override fun correspondsTo(clazz: Class<*>): Boolean = componentClazz == clazz
+            }
+        } else {
+            object : ArchetypeImpl(this@World) {
+                override val componentClasses: Set<Class<*>> = componentClasses
+
+                override fun createFor(entityId: EntityId) {
+                    this.components[entityId] = this.componentClasses.map {
+                        factories[it]!!.newInstance()
+                    }
+                }
+
+                override fun createFor(entityId: EntityId, currentComponents: List<Any>) {
+                    this.components[entityId] = this.componentClasses.map {
+                        currentComponents.filterIsInstance(it).firstOrNull() ?: factories[it]!!.newInstance()
+                    }
                 }
             }
         }
@@ -172,8 +193,12 @@ fun EntityId.delete() {
 
 context(World)
 fun EntityId.remove(componentClass: Class<*>) {
-    // TODO: Move entity to different archetype probably
-    archetypes.filter { it.has(this) }.first { it.correspondsTo(componentClass) }.deleteFor(this)
+    val currentArchetype = archetypes.filter { it.has(this) }.first { it.correspondsTo(componentClass) }
+    val currentComponents = currentArchetype.getFor(this)
+    currentArchetype.deleteFor(this)
+    val leftOverComponents = currentComponents?.map { it.javaClass }?.filterNot { it == componentClass }?.toSet() ?: emptySet()
+    val newArchetype = getOrCreateArchetype(leftOverComponents)
+    newArchetype.createFor(this, currentComponents ?: emptyList())
 }
 
 context(World)

@@ -2,9 +2,7 @@ package de.hanno.ecs
 
 import java.lang.reflect.Constructor
 
-class World(
-    val maxEntityCount: Int = 100000,
-) {
+class World {
     @PublishedApi
     internal val archetypes = mutableSetOf<Archetype>()
     internal val instanceOfs = mutableMapOf<Long, Long>()
@@ -35,9 +33,15 @@ class World(
     private fun Long.toEntityId() = this or 1L
 }
 
+inline fun <reified A: Any> World.forEntitiesWith(noinline block: (EntityId, A) -> Unit) {
+    archetypes.filter {
+        it.componentClasses.contains(A::class.java)
+    }.forEach { it.forEntities(A::class.java, block) }
+}
+
 inline fun <reified A: Any, reified B: Any> World.forEntitiesWith(noinline block: (EntityId, A, B) -> Unit) {
-    archetypes.first {
+    archetypes.filter {
         val c = it.componentClasses
-        c.size == 2 && c.contains(A::class.java) && c.contains(B::class.java)
-    }?.forEntities(block)
+        c.contains(A::class.java) && c.contains(B::class.java)
+    }.forEach { it.forEntities(A::class.java, B::class.java, block) }
 }
