@@ -5,62 +5,39 @@ import java.lang.reflect.Constructor
 class World(
     val maxEntityCount: Int = 100000,
 ) {
-    internal val archetypes = mutableMapOf<Set<Long>, Archetype>()
-    internal val registeredComponents = mutableMapOf<Class<*>, Long>()
+    @PublishedApi
+    internal val archetypes = mutableSetOf<Archetype>()
+    internal val instanceOfs = mutableMapOf<Long, Long>()
+    internal val registeredComponents = mutableSetOf<Class<*>>()
     internal val factories = mutableMapOf<Class<*>, Constructor<*>>()
-    internal val entityIndex = mutableMapOf<Long, MutableSet<Long>>()
 
     internal val idsToRecycle = mutableListOf<Long>()
 
     internal var entityCounter = 0L
 
-    val entityCount: Int get() = entityIndex.size - idsToRecycle.size
+    val entityCount: Int get() = entityCounter.toInt() - idsToRecycle.size
 
     inline fun <reified T> register() = register(T::class.java)
 
-    fun register(clazz: Class<*>): Long = if(clazz.isPacked) {
-        PackedComponentId()
-    } else {
-        factories[clazz] = clazz.constructors.first()
-        ComponentId()
-    }.apply {
-        registeredComponents[clazz] = this
+    fun register(clazz: Class<*>) {
+        if (!clazz.isPacked) {
+            factories[clazz] = clazz.constructors.first()
+        }
+        registeredComponents.add(clazz)
     }
 
     private fun allocateId(): Long = idsToRecycle.firstOrNull()?.apply {
         idsToRecycle.remove(this)
     } ?: (entityCounter++ shl idShiftBitCount)
 
-    fun Entity(): Long {
-        val allocatedId = allocateId().toEntityId()
+    fun Entity(): Long = allocateId().toEntityId()
 
-        return allocatedId.apply {
-            entityIndex[this] = mutableSetOf()
-        }
-    }
-    fun ComponentId(): Long {
-        val allocatedId = (entityCounter++ shl idShiftBitCount).toComponentId()
-
-        return allocatedId.apply {
-            entityIndex[this] = mutableSetOf()
-        }
-    }
-    fun PackedComponentId(): Long {
-        val allocatedId = (entityCounter++ shl idShiftBitCount).toPackedComponentId()
-
-        return allocatedId.apply {
-            entityIndex[this] = mutableSetOf()
-        }
-    }
-
-    fun getEntity(id: EntityId) = if (entityIndex.containsKey(id)) id else null
-
-    fun EntityId.setInstanceOf(other: EntityId) {
-        entityIndex[this]!!.add(other.toInstanceOfIdentifier())
-    }
-
-    private fun EntityId.toInstanceOfIdentifier() = this or 3L
     private fun Long.toEntityId() = this or 1L
-    private fun Long.toComponentId() = this or 2L
-    private fun Long.toPackedComponentId() = this or 2L or 4L
+}
+
+inline fun <reified A: Any, reified B: Any> World.forEntitiesWith(noinline block: (EntityId, A, B) -> Unit) {
+    archetypes.first {
+        val c = it.componentClasses
+        c.size == 2 && c.contains(A::class.java) && c.contains(B::class.java)
+    }?.forEntities(block)
 }

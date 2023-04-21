@@ -1,4 +1,5 @@
 import de.hanno.ecs.*
+import java.lang.IllegalStateException
 import java.nio.ByteBuffer
 
 fun main() {
@@ -22,7 +23,7 @@ fun main() {
             val entityCount = entities.size
             run {
                 val start = System.currentTimeMillis()
-                archetypes.values.forEach { it.update() }
+                archetypes.forEach { it.update() }
                 println("Update $entityCount entities took ${System.currentTimeMillis() - start} ms")
             }
             run {
@@ -61,24 +62,21 @@ fun main() {
                 }
                 println("Accessing $entityCount packed components from world normally took ${System.currentTimeMillis() - start} ms")
             }
+            run {
+                val start = System.currentTimeMillis()
+                var counter = 0
+                forEntitiesWith<PositionComponent, Velocity> { _, position, velocity ->
+                    position.a++
+                    velocity.b++
+                    counter++
+                }
+                println("Updating $counter entities with two components took ${System.currentTimeMillis() - start} ms")
+            }
         }
     }
 }
 
 data class PositionComponent(var a: Int = 0)
-class PositionArchetype(world: World) : ArchetypeImpl(world) {
-    override val componentClasses = setOf(PositionComponent::class.java)
-
-    override fun createFor(entityId: EntityId) {
-        components.put(entityId, listOf(PositionComponent()))
-    }
-    override fun update() {
-        components.forEach {
-            val positionComponent = it.value[0] as PositionComponent
-            positionComponent.a += 1
-        }
-    }
-}
 
 data class Velocity(var b: Int = 1)
 
@@ -93,11 +91,6 @@ class PositionVelocityPackedArchetype(private val world: World): PackedArchetype
     }
 
     override val componentClasses = setOf(PositionVelocityPacked::class.java)
-    override val componentIds = setOf(world.registeredComponents[PositionVelocityPacked::class.java]!!)
-
-    init {
-        world.archetypes[componentIds] = this
-    }
 
     private val entities = mutableMapOf<EntityId, Int>()
     private var currentIndex = 0
@@ -124,6 +117,11 @@ class PositionVelocityPackedArchetype(private val world: World): PackedArchetype
         entities[entityId] = entities.size
     }
 
+    override fun createFor(entityId: EntityId, currentComponentes: List<Any>) {
+        // TODO: Figure out if it's ok to ignore currentComponents
+        createFor(entityId)
+    }
+
     override fun deleteFor(entityId: EntityId) {
         entities.remove(entityId)
     }
@@ -137,7 +135,7 @@ class PositionVelocityPackedArchetype(private val world: World): PackedArchetype
             }
         }
     }
-    override fun getFor(entityId: EntityId): List<*>? = world.run {
+    override fun getFor(entityId: EntityId): List<Any>? = world.run {
         val index = entities.getOrDefault(entityId, null)
 
         return if(index != null) {
@@ -147,6 +145,16 @@ class PositionVelocityPackedArchetype(private val world: World): PackedArchetype
             } else null
         } else null
     }
+
+    override fun <A : Any> forEntities(block: (EntityId, A) -> Unit) {
+        entities.forEach { block(it.key, getFor(it.key)!![0] as A) }
+    }
+
+    override fun <A : Any, B : Any> forEntities(block: (EntityId, A, B) -> Unit) {
+        throw IllegalStateException("Packed archetypes should never expect to iterate multiple component rows!")
+    }
+
+    override fun has(entity: EntityId): Boolean = entities.containsKey(entity)
 
     override fun getPackedFor(entityId: EntityId): PositionVelocityPacked? = world.run {
         val index = entities.getOrDefault(entityId, null)

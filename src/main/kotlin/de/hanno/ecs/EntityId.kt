@@ -18,9 +18,6 @@ val Long.isEntity: Boolean get() = this[0]
 val Long.isComponent: Boolean get() = this[1] && !this[0]
 val Long.isPackedComponent: Boolean get() = isComponent && this[2]
 
-val Long.isInstanceOf: Boolean get() = this[1] && this[1]
-val Long.targetInstance: Long get() = (idPart shl idShiftBitCount ) or 1L
-
 context(World)
 fun EntityId.getBinaryStrings(): String {
     return "       " + toBinaryString() + "\n" +
@@ -31,22 +28,18 @@ val Long.binaryString get() = toString(2).padStart(Long.SIZE_BITS, '0')
 val Long.shortBinaryString get() = toString(2).padStart(Int.SIZE_BITS, '0')
 
 context(World)
-fun EntityId.has(componentClass: Class<*>): Boolean = entityIndex[this]?.contains(registeredComponents[componentClass]!!) ?: false
+fun EntityId.has(componentClass: Class<*>): Boolean = archetypes.any { it.componentClasses.contains(componentClass) && it.has(this) }
 
 context(World)
 fun <T> EntityId.get(clazz: Class<T>): T? {
-    val archeType = if(clazz.isPacked) getPackedArchetype(clazz as Class<PackedComponent>) else getArchetype(getNonPackedComponentIds())
+    val archeType = if(clazz.isPacked) getPackedArchetype(clazz as Class<PackedComponent>) else getArchetypes().first { it.correspondsTo(clazz) } // TODO: Is it okay to take the first here?
 
     val resolvedComponent = archeType.getFor(this)?.firstOrNull { clazz.isAssignableFrom(it!!.javaClass) } as T?
 
     return if(resolvedComponent != null) {
         resolvedComponent
     } else {
-        val potentialInstanceOfs = entityIndex[this]?.filter { it.isInstanceOf } ?: emptyList()
-        val potentialComponents = potentialInstanceOfs.mapNotNull {
-            archeType.getFor(it.targetInstance)?.firstOrNull { clazz.isAssignableFrom(it!!.javaClass) } as T?
-        }
-        potentialComponents.firstOrNull()
+        instanceOfs[this]?.get(clazz)
     }
 }
 
@@ -57,7 +50,7 @@ inline fun <reified T: PackedComponent> EntityId.on(noinline block: T.() -> Unit
 
 context(World)
 fun <T: PackedComponent> EntityId.on(clazz: Class<T>, block: T.() -> Unit) {
-    val archeType = archetypes.values.filterIsInstance<PackedArchetype<T>>().firstOrNull { it.correspondsTo(clazz) }
+    val archeType = archetypes.filterIsInstance<PackedArchetype<T>>().firstOrNull { it.correspondsTo(clazz) }
 
     archeType?.on(this, block)
 }
@@ -67,67 +60,74 @@ inline fun <reified T> EntityId.get(): T? = get(T::class.java)
 
 context(World)
 fun EntityId.add(clazz: Class<*>) {
-    val componentId = registeredComponents[clazz] ?: run {
+    if(!registeredComponents.contains(clazz)) {
         register(clazz)
     }
-    entityIndex[this]!!.add(componentId)
+    val currentArchetype = archetypes.firstOrNull { it.has(this) }
+    move(currentArchetype, clazz)
+}
 
-    val archeType = getOrCreateArchetype(getNonPackedComponentIds())
-    archeType.createFor(this)
+context(World)
+fun EntityId.move(currentArchetype: Archetype?, clazz: Class<*>) {
+    val currentComponents = currentArchetype?.getFor(this) ?: emptyList()
+
+    val archetype = getOrCreateArchetype(if(currentArchetype == null) {
+        setOf(clazz)
+    } else {
+      currentArchetype.componentClasses + clazz
+    })
+    archetype.createFor(this, currentComponents)
     // TODO: Move over old components
 }
+
 context(World)
 @JvmName("addPacked")
 fun <T: PackedComponent> EntityId.add(clazz: Class<T>) {
-    val componentId = registeredComponents[clazz] ?: run {
+    if(!registeredComponents.contains(clazz)) {
         register(clazz)
     }
-    entityIndex[this]!!.add(componentId)
 
-    val archetype = getPackedArchetype(setOf(componentId))
+    val archetype = archetypes.first { it.correspondsTo(clazz) }
     archetype.createFor(this)
-
-    // TODO: Move over old components
+    // TODO: Move over old components?
 }
 
 val Class<*>.isPacked get() = PackedComponent::class.java.isAssignableFrom(this)
 
 context(World)
-private fun EntityId.getArchetype(componentIds: Set<Long>) = archetypes[componentIds]
-    ?: throw IllegalStateException(
-        "No archetype found for componentIds ${componentIds.map { componentId -> registeredComponents.entries.first { it.value == componentId } }}"
-    )
+private fun EntityId.getArchetypes() = archetypes.filter { it.has(this) }
 
 context(World)
-private fun EntityId.getOrCreateArchetype(componentIds: Set<Long>): Archetype {
-    val archeType = archetypes[componentIds] ?: run {
+private fun EntityId.getOrCreateArchetype(componentClasses: Set<Class<*>>): Archetype {
+    val archeType = archetypes.firstOrNull { it.componentClasses == componentClasses } ?: run {
         val newArchetype = object : ArchetypeImpl(this@World) {
-            override val componentClasses: Set<Class<*>> = componentIds.map { id -> registeredComponents.entries.first { it.value == id }.key }.toSet()
-            override val componentIds = componentIds
+            override val componentClasses: Set<Class<*>> = componentClasses
 
             override fun createFor(entityId: EntityId) {
-                this.components.put(entityId, this.componentClasses.map {
+                this.components[entityId] = this.componentClasses.map {
                     factories[it]!!.newInstance()
-                })
+                }
+            }
+
+            override fun createFor(entityId: EntityId, currentComponentes: List<Any>) {
+                this.components[entityId] = this.componentClasses.map {
+                    currentComponentes.filterIsInstance(it).firstOrNull() ?: factories[it]!!.newInstance()
+                }
             }
         }
-        archetypes[componentIds] = newArchetype
         newArchetype
     }
     return archeType
 }
 
 context(World)
-private fun <T : PackedComponent> EntityId.getPackedArchetype(componentClass: Class<T>) = archetypes.values.firstOrNull { archeType ->
+private fun <T : PackedComponent> EntityId.getPackedArchetype(componentClass: Class<T>) = archetypes.firstOrNull { archeType ->
     archeType.correspondsTo(componentClass)
 } ?: throw IllegalStateException("No archetype found for component type $componentClass")
 
 context(World)
-private fun EntityId.getPackedArchetype(componentId: Set<Long>) = archetypes[componentId] ?: throw IllegalStateException("No archetype found for component type with id $componentId (${registeredComponents.entries.first { it.value == componentId.first() }})")
-
-context(World)
 private fun <T: PackedComponent> EntityId.getOrCreatePackedArchetype(componentClass: Class<T>): Archetype {
-    val archeType = archetypes[setOf(registeredComponents[componentClass])] ?: run {
+    val archeType = archetypes.firstOrNull { it.componentClasses.contains(componentClass) } ?: run {
 //        val newArchetype = object : PackedArchetype<T>(componentClass, this@World) {
 //            override fun on(entityId: EntityId, block: T.() -> Unit) {
 //                TODO("Not yet implemented")
@@ -163,24 +163,17 @@ private fun <T: PackedComponent> EntityId.getOrCreatePackedArchetype(componentCl
 }
 
 context(World)
-private fun EntityId.getNonPackedComponentIds(): Set<Long> {
-    val allIds = entityIndex[this]!!
-    val result = mutableSetOf<Long>()
-    allIds.forEach { if(it.isComponent && !it.isPackedComponent) { result.add(it) } }
-    return result
-}
-
-context(World)
 fun EntityId.delete() {
     if (isAlive) {
-        entityIndex.remove(this)
+        archetypes.filter { it.has(this) }.forEach { it.deleteFor(this) }
         idsToRecycle.add(this) // TODO: Increment generation here
     }
 }
 
 context(World)
 fun EntityId.remove(componentClass: Class<*>) {
-    entityIndex[this]!!.remove(registeredComponents[componentClass]!!)
+    // TODO: Move entity to different archetype probably
+    archetypes.filter { it.has(this) }.first { it.correspondsTo(componentClass) }.deleteFor(this)
 }
 
 context(World)
